@@ -26,7 +26,7 @@ interface GroceryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertList(list: GroceryListEntity)
 
-    @Query("DELETE FROM grocery_items WHERE listId = :listId")
+    @Query("DELETE FROM grocery_items WHERE id = :listId")
     suspend fun deleteItemsByListId(listId: Int)
 
     @Query("DELETE FROM grocery_lists WHERE id = :listId")

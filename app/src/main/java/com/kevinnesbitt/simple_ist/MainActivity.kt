@@ -4,7 +4,6 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.appcompat.app.AppCompatDelegate
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -339,7 +338,8 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                                         },
                                         onLongClick = { expandableListId = groceryItem.id }
                                     ),
-                                textDecoration = TextDecoration.LineThrough
+                                textDecoration = TextDecoration.LineThrough,
+                                color = Color.LightGray
                             )
                         } else {
                             Text(
