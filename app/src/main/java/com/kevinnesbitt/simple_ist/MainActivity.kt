@@ -4,8 +4,12 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +23,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.DividerDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -27,22 +33,25 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
-import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
+import androidx.navigation.NavType
 import com.kevinnesbitt.simple_ist.ui.theme.SimpleistTheme
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -64,13 +73,13 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable(
-                        route = "list/{listName}"
+                        route = "list/{listId}",
+                        arguments = listOf(navArgument("listId") { type = NavType.IntType })
                     ) { backStackEntry ->
 
-                        val listName =
-                            backStackEntry.arguments?.getString("listName") ?: ""
+                        val listId = backStackEntry.arguments?.getInt("listId") ?: 0
 
-                        ListScreen(listName = listName, navController = navController, viewModel)
+                        ListScreen(listId = listId, navController = navController, viewModel)
                     }
                 }
             }
@@ -78,6 +87,7 @@ class MainActivity : ComponentActivity() {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
     val lsts = viewModel.lists
@@ -88,6 +98,10 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
 
     var isAddingLst by remember {
         mutableStateOf(false)
+    }
+
+    var expandedListId by remember {
+        mutableStateOf<Int?>(null)
     }
 
     Scaffold(modifier = Modifier
@@ -119,22 +133,42 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
             .padding(innerPadding)
         ) {
             lsts.forEach { groceryList ->
-                Button(
-                    onClick = {
-                        navController.navigate("list/${groceryList.id}")
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth(),
-                    colors = ButtonColors(
-                        containerColor = Color.White,
-                        contentColor = Color.Black,
-                        disabledContentColor = Color.Black,
-                        disabledContainerColor = Color.White
-                    )
-                ) {
-                    Text(text = groceryList.name, fontSize = 20.sp, textAlign = TextAlign.Left)
+                Box {
+                    HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .background(color = Color.White)
+                            .combinedClickable(
+                                onClick = { navController.navigate("list/${groceryList.id}") },
+                                onLongClick = { expandedListId = groceryList.id }
+                            ),
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.Absolute.Left,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text(
+                                text = groceryList.name,
+                                fontSize = 32.sp,
+                                color = Color.Black,
+                                modifier = Modifier.padding(10.dp)
+                            )
+                        }
+                    }
+                    HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
+                    DropdownMenu(
+                        expanded = expandedListId == groceryList.id,
+                        onDismissRequest = { expandedListId = null }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text("Delete") },
+                            onClick = {
+                                viewModel.deleteList(listId = groceryList.id)
+                            }
+                        )
+                    }
                 }
-                HorizontalDivider(Modifier, DividerDefaults.Thickness, DividerDefaults.color)
             }
 
             if (isAddingLst) {
@@ -155,27 +189,49 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                             }
                         }
                     ),
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    textStyle = TextStyle(fontSize = 20.sp),
+                    singleLine = true
                 )
             }
         }
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ListScreen(listName: String, navController: NavController, viewModel: HomeViewModel) {
-    val itemLst = viewModel.lists
+fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewModel) {
+    val groceryListObj = viewModel.lists.find { it.id == listId }
+    val itemLst = groceryListObj?.items?: emptyList()
+    val listName = groceryListObj?.name?: ""
+
+    var newListName by remember {
+        mutableStateOf("  $listName")
+    }
+
+    var isChangingListName by remember {
+        mutableStateOf(false)
+    }
 
     var itemName by remember {
-        mutableStateOf("")
+        mutableStateOf("• ")
     }
 
     var isAddingItem by remember {
         mutableStateOf(false)
     }
 
+    var expandableListId by remember {
+        mutableStateOf<Int?>(null)
+    }
+
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier.fillMaxSize()
+        // topBar = {
+        //     Row(modifier = Modifier
+        //         .fillMaxWidth()
+        //         .background(color = Color.Yellow)) {}
+        // }
     ) { innerPadding ->
         Column(modifier = Modifier
             .fillMaxSize()
@@ -184,51 +240,126 @@ fun ListScreen(listName: String, navController: NavController, viewModel: HomeVi
             Row(modifier = Modifier
                 .fillMaxWidth()
                 .background(Color.Yellow),
-                horizontalArrangement = Arrangement.End
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (!isAddingItem) {
-                    Button(
-                        onClick = {
-                            isAddingItem = true
-                        },
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                        colors = ButtonColors(
-                            containerColor = Color.Yellow,
-                            contentColor = Color.Black,
-                            disabledContentColor = Color.Black,
-                            disabledContainerColor = Color.Yellow
+                Row(horizontalArrangement = Arrangement.End) {
+                    if (isChangingListName) {
+                        BasicTextField(
+                            value = newListName,
+                            onValueChange = { text ->
+                                newListName = text
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                imeAction = ImeAction.Done
+                            ),
+                            keyboardActions = KeyboardActions(
+                                onDone = {
+                                    viewModel.updateListName(listId = listId, newName = newListName)
+                                    isChangingListName = false
+                                }
+                            ),
+                            textStyle = TextStyle(
+                                fontSize = 28.sp,
+                                color = Color.Black,
+                                fontWeight = FontWeight.Bold
+                            ),
+                            singleLine = true
                         )
-                    ) {
-                        Text(text = "+", fontSize = 24.sp)
+                    } else {
+                        Text(
+                            text = "  $listName",
+                            fontSize = 28.sp,
+                            color = Color.Black,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier
+                                .clickable( onClick = {
+                                    isChangingListName = true
+                                } )
+                        )
                     }
-                } else {
-                    Button(
-                        onClick = {
-                            isAddingItem = false
-                        },
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                        colors = ButtonColors(
-                            containerColor = Color.Yellow,
-                            contentColor = Color.Black,
-                            disabledContentColor = Color.Black,
-                            disabledContainerColor = Color.Yellow
-                        )
-                    ) {
-                        Text(text = "Done", fontSize = 20.sp)
+                }
+
+                Row(horizontalArrangement = Arrangement.End, modifier = Modifier
+                    .weight(1f)
+                    .fillMaxWidth()) {
+                    if (!isAddingItem) {
+                        Button(
+                            onClick = {
+                                isAddingItem = true
+                            },
+                            modifier = Modifier.align(Alignment.CenterVertically),
+                            colors = ButtonColors(
+                                containerColor = Color.Yellow,
+                                contentColor = Color.Black,
+                                disabledContentColor = Color.Black,
+                                disabledContainerColor = Color.Yellow
+                            )
+                        ) {
+                            Text(text = "+", fontSize = 24.sp)
+                        }
+                    } else {
+                        Button(
+                            onClick = {
+                                isAddingItem = false
+                            },
+                            modifier = Modifier.align(Alignment.CenterVertically),
+                            colors = ButtonColors(
+                                containerColor = Color.Yellow,
+                                contentColor = Color.Black,
+                                disabledContentColor = Color.Black,
+                                disabledContainerColor = Color.Yellow
+                            )
+                        ) {
+                            Text(text = "Done", fontSize = 18.sp)
+                        }
                     }
                 }
             }
 
             if (itemLst.isNotEmpty()) {
                 LazyColumn {
-                    items(itemLst) { currentName ->
-                        Text(
-                            text = "- $currentName",
-                            fontSize = 20.sp,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(10.dp)
-                        )
+                    items(itemLst) { groceryItem ->
+                        if (groceryItem.strike) {
+                            Text(
+                                text = groceryItem.itemName,
+                                fontSize = 21.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp)
+                                    .combinedClickable(
+                                        onClick = {
+                                            viewModel.strikeItem(listId = listId, itemId = groceryItem.id)
+                                        },
+                                        onLongClick = { expandableListId = groceryItem.id }
+                                    ),
+                                textDecoration = TextDecoration.LineThrough
+                            )
+                        } else {
+                            Text(
+                                text = groceryItem.itemName,
+                                fontSize = 21.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp)
+                                    .combinedClickable(
+                                        onClick = {
+                                            viewModel.strikeItem(listId = listId, itemId = groceryItem.id)
+                                        },
+                                        onLongClick = { expandableListId = groceryItem.id }
+                                    )
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = expandableListId == groceryItem.id,
+                            onDismissRequest = { expandableListId = null }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Delete") },
+                                onClick = {
+                                    viewModel.deleteItem(itemId = groceryItem.id, listId = listId)
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -244,9 +375,15 @@ fun ListScreen(listName: String, navController: NavController, viewModel: HomeVi
                     ),
                     keyboardActions = KeyboardActions(
                         onDone = {
-                            itemName = ""
+                            viewModel.addItem(listId = listId, itemName = itemName)
+                            itemName = "• "
                         }
-                    )
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(10.dp),
+                    textStyle = TextStyle(fontSize = 21.sp),
+                    singleLine = true
                 )
             }
         }
