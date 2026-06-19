@@ -12,8 +12,8 @@ import kotlinx.coroutines.launch
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).groceryDao()
 
-    private var nextId = 1
-    private var nextItemId = 1
+    // private var nextId = 1
+    // private var nextItemId = 1
 
     val lists: StateFlow<List<GroceryList>> = dao.getAllLists()
         .combine(dao.getAllItems()) { lists, items ->
@@ -31,13 +31,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addList(name: String) {
         viewModelScope.launch {
-            dao.insertList(GroceryListEntity(id = nextId++, name = name))
+            dao.insertList(GroceryListEntity(id = 0, name = name))
         }
     }
 
     fun addItem(listId: Int, itemName: String) {
         viewModelScope.launch {
-            dao.insertItem(GroceryItemEntity(id = nextItemId++, listId = listId, itemName = itemName, strike = false))
+            dao.insertItem(GroceryItemEntity(id = 0, listId = listId, itemName = itemName, strike = false))
         }
     }
 
@@ -49,6 +49,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteList(listId: Int) {
         viewModelScope.launch {
+            dao.deleteItemsByListId(listId)
             dao.deleteList(listId)
         }
     }

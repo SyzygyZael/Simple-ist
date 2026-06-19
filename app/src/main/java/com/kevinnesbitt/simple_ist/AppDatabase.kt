@@ -6,13 +6,13 @@ import kotlinx.coroutines.flow.Flow
 
 @Entity(tableName = "grocery_lists")
 data class GroceryListEntity(
-    @PrimaryKey val id: Int,
+    @PrimaryKey(autoGenerate = true) val id: Int,
     val name: String
 )
 
 @Entity(tableName = "grocery_items")
 data class GroceryItemEntity(
-    @PrimaryKey val id: Int,
+    @PrimaryKey(autoGenerate = true) val id: Int,
     val listId: Int,
     val itemName: String,
     val strike: Boolean
@@ -25,6 +25,9 @@ interface GroceryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertList(list: GroceryListEntity)
+
+    @Query("DELETE FROM grocery_items WHERE listId = :listId")
+    suspend fun deleteItemsByListId(listId: Int)
 
     @Query("DELETE FROM grocery_lists WHERE id = :listId")
     suspend fun deleteList(listId: Int)
@@ -45,7 +48,7 @@ interface GroceryDao {
     suspend fun updateItemStrike(itemId: Int, strike: Boolean)
 }
 
-@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class], version = 1)
+@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class], version = 2)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun groceryDao(): GroceryDao
 
