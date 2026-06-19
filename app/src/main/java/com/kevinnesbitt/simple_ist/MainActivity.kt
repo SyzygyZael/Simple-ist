@@ -30,6 +30,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,6 +45,8 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavType
@@ -55,13 +58,16 @@ import androidx.navigation.navArgument
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
             SimpleistTheme {
 
                 val navController = rememberNavController()
-                val viewModel: HomeViewModel = viewModel()
+                val viewModel: HomeViewModel = viewModel(
+                    factory = ViewModelProvider.AndroidViewModelFactory.getInstance(application)
+                )
 
                 NavHost(
                     navController = navController,
@@ -90,7 +96,7 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
-    val lsts = viewModel.lists
+    val lsts by viewModel.lists.collectAsState()
 
     var lstName by remember {
         mutableStateOf("")
@@ -201,7 +207,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewModel) {
-    val groceryListObj = viewModel.lists.find { it.id == listId }
+    val groceryListObj = viewModel.lists.collectAsState().value.find { it.id == listId }
     val itemLst = groceryListObj?.items?: emptyList()
     val listName = groceryListObj?.name?: ""
 
