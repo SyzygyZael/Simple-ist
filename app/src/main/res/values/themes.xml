@@ -2,6 +2,7 @@
 <resources>
 
     <style name="Theme.Simpleist" parent="android:Theme.Material.Light.NoActionBar" />
+
     <style name="Theme.App.Starting" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">#FFFF00</item>
         <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
