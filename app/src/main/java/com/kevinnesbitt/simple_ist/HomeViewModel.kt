@@ -29,9 +29,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
-    fun addList(name: String) {
+    fun addList(name: String, onComplete: (Int) -> Unit = {}) {
         viewModelScope.launch {
-            dao.insertList(GroceryListEntity(id = 0, name = name))
+            val newId = dao.insertList(GroceryListEntity(id = 0, name = name))
+            onComplete(newId.toInt())
         }
     }
 
