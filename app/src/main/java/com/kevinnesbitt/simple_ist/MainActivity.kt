@@ -5,7 +5,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
-import androidx.collection.mutableLongSetOf
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -15,7 +14,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -50,12 +48,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -93,6 +89,17 @@ class MainActivity : ComponentActivity() {
                     factory = ViewModelProvider.AndroidViewModelFactory.getInstance(application)
                 )
 
+                val settings by viewModel.settings.collectAsState()
+
+                LaunchedEffect(settings.barColor) {
+                    enableEdgeToEdge(
+                        statusBarStyle = SystemBarStyle.light(
+                            scrim = settings.barColor.toInt(),
+                            darkScrim = settings.barColor.toInt()
+                        )
+                    )
+                }
+
                 NavHost(
                     navController = navController,
                     startDestination = "home"
@@ -125,6 +132,39 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
     val lsts by viewModel.lists.collectAsState()
+    val settings by viewModel.settings.collectAsState()
+
+    var barTextColor by remember(settings) {
+        if (settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
+            mutableStateOf(Color.White)
+        } else {
+            mutableStateOf(Color.Black)
+        }
+    }
+
+    var mainTextColor by remember(settings) {
+        if (settings.darkMode) {
+            mutableStateOf(Color.White)
+        } else {
+            mutableStateOf(Color.Black)
+        }
+    }
+
+    var backgroundColor by remember(settings) {
+        if (settings.darkMode) {
+            mutableStateOf(Color.Black)
+        } else {
+            mutableStateOf(Color.White)
+        }
+    }
+
+    var dropdownColor by remember(settings) {
+        if (settings.darkMode) {
+            mutableStateOf(Color.Gray)
+        } else {
+            mutableStateOf(Color.White)
+        }
+    }
 
     var lstName by remember {
         mutableStateOf("")
@@ -161,7 +201,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
             // set up bottom bar
             Row(modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.Yellow),
+                .background(color = Color(settings.barColor)),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
                 Button(onClick = {
@@ -169,10 +209,10 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                 },
                     modifier = Modifier.align(Alignment.CenterVertically),
                     colors = ButtonColors(
-                        containerColor = Color.Yellow,
-                        contentColor = Color.Black,
-                        disabledContentColor = Color.Black,
-                        disabledContainerColor = Color.Yellow
+                        containerColor = Color(settings.barColor),
+                        contentColor = barTextColor,
+                        disabledContentColor = barTextColor,
+                        disabledContainerColor = Color(settings.barColor)
                     )
                 ) {
                     Text(text = "⚙", fontSize = 27.sp)
@@ -183,10 +223,10 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                 },
                     modifier = Modifier.align(Alignment.CenterVertically),
                     colors = ButtonColors(
-                        containerColor = Color.Yellow,
-                        contentColor = Color.Black,
-                        disabledContentColor = Color.Black,
-                        disabledContainerColor = Color.Yellow
+                        containerColor = Color(settings.barColor),
+                        contentColor = barTextColor,
+                        disabledContentColor = barTextColor,
+                        disabledContainerColor = Color(settings.barColor)
                     )
                 ) {
                     Text(text = "+", fontSize = 27.sp)
@@ -198,6 +238,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
         Column(modifier = Modifier
             .fillMaxSize()
             .padding(innerPadding)
+            .background(color = backgroundColor)
         ) {
             HorizontalDivider(thickness = 2.dp, color = Color.Gray)
 
@@ -208,7 +249,8 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                         shape = RoundedCornerShape(15.dp),
                         border = BorderStroke(2.dp, Color.Gray),
                         tonalElevation = 3.dp,
-                        modifier = Modifier.padding(3.dp)
+                        modifier = Modifier
+                            .padding(3.dp)
                     ) {
                         Row(
                             modifier = Modifier
@@ -217,7 +259,8 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                 .combinedClickable(
                                     onClick = { navController.navigate("list/${groceryList.id}") },
                                     onLongClick = { expandedListId = groceryList.id }
-                                ),
+                                )
+                                .background(color = backgroundColor)
                         ) {
                             Row(
                                 horizontalArrangement = Arrangement.Absolute.Left,
@@ -226,7 +269,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                 Text(
                                     text = groceryList.name,
                                     fontSize = 30.sp,
-                                    color = Color.Black,
+                                    color = mainTextColor,
                                     modifier = Modifier
                                         .padding(10.dp)
                                 )
@@ -235,17 +278,20 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                         // dropdown menu setup
                         DropdownMenu(
                             expanded = expandedListId == groceryList.id,
-                            onDismissRequest = { expandedListId = null }
+                            onDismissRequest = { expandedListId = null },
+                            modifier = Modifier.background(color = Color.White)
                         ) {
                             DropdownMenuItem(
-                                text = { Text(text = "Delete") },
+                                text = { Text(text = "Delete", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
                                 onClick = {
                                     viewModel.deleteList(listId = groceryList.id)
                                 }
                             )
 
+                            HorizontalDivider(thickness = 1.dp, color = Color.Black)
+
                             DropdownMenuItem(
-                                text = { Text(text = "Rename") },
+                                text = { Text(text = "Rename", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
                                 onClick = {
                                     tempGroceryListId = groceryList.id
                                     isChangingListName = true
@@ -329,7 +375,8 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                     },
                     title = { Text(text = "Error") },
                     text = { Text(text = "Cannot create lists with the same name") },
-                    shape = RoundedCornerShape(10.dp)
+                    shape = RoundedCornerShape(10.dp),
+                    containerColor = dropdownColor
                 )
             }
 
@@ -338,40 +385,78 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                 Dialog(
                     onDismissRequest = { isChangingListName = false }
                 ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text(text = "Rename")
-
-                        val focusRequester = remember { FocusRequester() }
-
-                        TextField(
-                            value = newName,
-                            onValueChange = { text ->
-                                newName = text
-                            },
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = ImeAction.Done
-                            ),
-                            keyboardActions = KeyboardActions(
-                                onDone = {
-                                    if (newName.isNotBlank()) {
-                                        viewModel.updateListName(listId = tempGroceryListId, newName = newName)
-                                        newName = ""
-                                        lstName = ""
-                                        tempGroceryListId = 0
-                                        isChangingListName = false
-                                    }
-                                }
-                            ),
+                    Surface(
+                        color = Color.White,
+                        modifier = Modifier.size(350.dp, 200.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        border = BorderStroke(2.dp, Color.Gray)
+                    ) {
+                        Column(
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .focusRequester(focusRequester),
-                            textStyle = TextStyle(fontSize = 20.sp),
-                            singleLine = true,
-                            shape = RoundedCornerShape(20.dp)
-                        )
+                                .fillMaxSize()
+                                .padding(4.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Text(text = "Rename", textAlign = TextAlign.Center, fontSize = 21.sp, modifier = Modifier.fillMaxWidth(), fontWeight = FontWeight.Bold)
 
-                        // request keyboard
-                        LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                            val focusRequester = remember { FocusRequester() }
+
+                            TextField(
+                                value = newName,
+                                onValueChange = { text ->
+                                    newName = text
+                                },
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        if (newName.isNotBlank()) {
+                                            viewModel.updateListName(
+                                                listId = tempGroceryListId,
+                                                newName = newName
+                                            )
+                                            newName = ""
+                                            lstName = ""
+                                            tempGroceryListId = 0
+                                            isChangingListName = false
+                                        }
+                                    }
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester),
+                                textStyle = TextStyle(fontSize = 20.sp),
+                                singleLine = true,
+                                shape = RoundedCornerShape(20.dp)
+                            )
+
+                            // request keyboard
+                            LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+                            Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                                Button(
+                                    onClick = {
+                                        if (newName.isNotBlank()) {
+                                            viewModel.updateListName(
+                                                listId = tempGroceryListId,
+                                                newName = newName
+                                            )
+                                            newName = ""
+                                            lstName = ""
+                                            tempGroceryListId = 0
+                                            isChangingListName = false
+                                        }
+                                    },
+                                    colors = ButtonColors(containerColor = Color.DarkGray,
+                                        contentColor = Color.White,
+                                        disabledContentColor = Color.White,
+                                        disabledContainerColor = Color.DarkGray)
+                                ) {
+                                    Text(text = "Confirm")
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -385,6 +470,32 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
     val groceryListObj = viewModel.lists.collectAsState().value.find { it.id == listId }
     val itemLst = groceryListObj?.items?: emptyList()
     val listName = groceryListObj?.name?: ""
+
+    val settings by viewModel.settings.collectAsState()
+
+    var barTextColor by remember(settings) {
+        if (settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
+            mutableStateOf(Color.White)
+        } else {
+            mutableStateOf(Color.Black)
+        }
+    }
+
+    var mainTextColor by remember(settings) {
+        if (settings.darkMode) {
+            mutableStateOf(Color.White)
+        } else {
+            mutableStateOf(Color.Black)
+        }
+    }
+
+    var backgroundColor by remember(settings) {
+        if (settings.darkMode) {
+            mutableStateOf(Color.Black)
+        } else {
+            mutableStateOf(Color.White)
+        }
+    }
 
     var newListName by remember {
         mutableStateOf("  $listName")
@@ -407,7 +518,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
     }
 
     var randTextChooser by remember {
-        mutableStateOf<Int?>((1..5).random())
+        mutableStateOf<Int?>((1..6).random())
     }
 
     Scaffold(
@@ -417,11 +528,12 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
         Column(modifier = Modifier
             .fillMaxSize()
             .padding(innerPadding)
+            .background(color = backgroundColor)
         ) {
             // top bar list name and buttons
             Row(modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.Yellow),
+                .background(Color(settings.barColor)),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -429,10 +541,10 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                 Button(
                     onClick = { navController.navigate("home") },
                     colors = ButtonColors(
-                        containerColor = Color.Yellow,
-                        contentColor = Color.Black,
-                        disabledContentColor = Color.Black,
-                        disabledContainerColor = Color.Yellow
+                        containerColor = Color(settings.barColor),
+                        contentColor = barTextColor,
+                        disabledContentColor = barTextColor,
+                        disabledContainerColor = Color(settings.barColor)
                     )
                 ) {
                     Text(text = "<", fontSize = 28.sp)
@@ -459,7 +571,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                         ),
                         textStyle = TextStyle(
                             fontSize = 28.sp,
-                            color = Color.Black,
+                            color = barTextColor,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
                         ),
@@ -476,7 +588,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                     Text(
                         text = "  $listName",
                         fontSize = 28.sp,
-                        color = Color.Black,
+                        color = barTextColor,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                             .clickable( onClick = {
@@ -494,10 +606,10 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                             isAddingItem = true },
                         modifier = Modifier.align(Alignment.CenterVertically),
                         colors = ButtonColors(
-                            containerColor = Color.Yellow,
-                            contentColor = Color.Black,
-                            disabledContentColor = Color.Black,
-                            disabledContainerColor = Color.Yellow
+                            containerColor = Color(settings.barColor),
+                            contentColor = barTextColor,
+                            disabledContentColor = barTextColor,
+                            disabledContainerColor = Color(settings.barColor)
                         )
                     ) {
                         Text(text = "+", fontSize = 24.sp)
@@ -508,10 +620,10 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                             isAddingItem = false },
                         modifier = Modifier.align(Alignment.CenterVertically),
                         colors = ButtonColors(
-                            containerColor = Color.Yellow,
-                            contentColor = Color.Black,
-                            disabledContentColor = Color.Black,
-                            disabledContainerColor = Color.Yellow
+                            containerColor = Color(settings.barColor),
+                            contentColor = barTextColor,
+                            disabledContentColor = barTextColor,
+                            disabledContainerColor = Color(settings.barColor)
                         )
                     ) {
                         Text(text = "Done", fontSize = 18.sp)
@@ -557,7 +669,8 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                                             )
                                         },
                                         onLongClick = { expandableListId = groceryItem.id }
-                                    )
+                                    ),
+                                color = mainTextColor
                             )
                         }
 
@@ -567,7 +680,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                             onDismissRequest = { expandableListId = null }
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Delete") },
+                                text = { Text(text = "Delete", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
                                 onClick = {
                                     viewModel.deleteItem(itemId = groceryItem.id, listId = listId)
                                 }
@@ -592,6 +705,8 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                         Text(text = "Quick! Write it down so you don't forget!", color = Color.Gray)
                     } else if (randTextChooser == 5) {
                         Text(text = "A blank space is but a limitless sky...", color = Color.Gray)
+                    } else if (randTextChooser == 6) {
+                        Text(text = "Hi Saman!", color = Color.Gray)
                     }
                 }
             }
@@ -603,7 +718,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                     .padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "• ", fontSize = 21.sp)
+                    Text(text = "• ", fontSize = 21.sp, color = mainTextColor)
 
                     val focusRequester = remember { FocusRequester() }
 
@@ -627,7 +742,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                             .fillMaxWidth()
                             .padding(10.dp)
                             .focusRequester(focusRequester),
-                        textStyle = TextStyle(fontSize = 21.sp),
+                        textStyle = TextStyle(fontSize = 21.sp, color = mainTextColor),
                         singleLine = true
                     )
                     // request keyboard
@@ -649,8 +764,34 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
         "Green" to 0xFF00FF00L,
         "Blue" to 0xFF0000FFL,
         "Yellow" to 0xFFFFFF00L,
-        "Gray" to 0xFF808080L
+        "Gray" to 0xFF808080L,
+        "Pink" to 0xFFFF69B4L,
+        "Royal Purple" to 0xFF7851A9L
     )
+
+    var barTextColor by remember(settings) {
+        if (settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor ==  0xFF7851A9L ) {
+            mutableStateOf(Color.White)
+        } else {
+            mutableStateOf(Color.Black)
+        }
+    }
+
+    var mainTextColor by remember(settings) {
+        if (settings.darkMode) {
+            mutableStateOf(Color.White)
+        } else {
+            mutableStateOf(Color.Black)
+        }
+    }
+
+    var backgroundColor by remember(settings) {
+        if (settings.darkMode) {
+            mutableStateOf(Color.Black)
+        } else {
+            mutableStateOf(Color.White)
+        }
+    }
 
     var darkModeSwitch by remember(settings) {
         mutableStateOf(settings.darkMode)
@@ -679,7 +820,6 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
-
             // set up bottom bar
             Row(modifier = Modifier
                 .fillMaxWidth()
@@ -693,11 +833,12 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
+                .background(color = backgroundColor)
         ) {
             // top bar name and buttons
             Row(modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.Yellow),
+                .background(Color(settings.barColor)),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -708,33 +849,36 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                         viewModel.updateSetting(darkMode = darkModeSwitch, barColor = barColorChoice)
                     },
                     colors = ButtonColors(
-                        containerColor = Color.Yellow,
-                        contentColor = Color.Black,
-                        disabledContentColor = Color.Black,
-                        disabledContainerColor = Color.Yellow
+                        containerColor = Color(settings.barColor),
+                        contentColor = barTextColor,
+                        disabledContentColor = barTextColor,
+                        disabledContainerColor = Color(settings.barColor)
                     )
                 ) {
-                    Text(text = "Done", fontSize = 17.sp)
+                    Text(text = "Save", fontSize = 17.sp)
                 }
 
                 Text(text = "Settings",
                     modifier = Modifier.weight(1f),
                     textAlign = TextAlign.Center,
                     fontSize = 27.sp,
-                    fontWeight = FontWeight.Bold
+                    fontWeight = FontWeight.Bold,
+                    color = barTextColor
                 )
                 Text(text = "              ")
             }
+
+            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
 
             // SETTINGS
 
             // dark mode switch
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().background(color = backgroundColor),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Dark Mode", modifier = Modifier.padding(21.dp))
+                Text(text = "Dark Mode", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = mainTextColor)
                 Switch(
                     checked = darkModeSwitch,
                     onCheckedChange = {
@@ -744,15 +888,15 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 )
             }
 
-            HorizontalDivider(thickness = 2.dp, color = Color.Black)
+            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
 
             // bar color
             Row(
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().background(color = backgroundColor),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Bar Color", modifier = Modifier.padding(21.dp))
+                Text(text = "Bar Color", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = mainTextColor)
                 Card(
                     border = BorderStroke(2.dp, color = Color.Gray),
                     modifier = Modifier
@@ -785,7 +929,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 }
             }
 
-            HorizontalDivider(thickness = 2.dp, color = Color.Black)
+            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
         }
     }
 }
