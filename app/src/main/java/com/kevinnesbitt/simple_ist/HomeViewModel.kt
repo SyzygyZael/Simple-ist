@@ -1,6 +1,7 @@
 package com.kevinnesbitt.simple_ist
 
 import android.app.Application
+import android.graphics.Color
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
@@ -11,6 +12,15 @@ import kotlinx.coroutines.launch
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
     private val dao = AppDatabase.getDatabase(application).groceryDao()
+
+    init {
+        viewModelScope.launch {
+            val existing = dao.getSettingsOnce()
+            if (existing == null) {
+                dao.insertSettings(SettingsEntity())
+            }
+        }
+    }
 
     // private var nextId = 1
     // private var nextItemId = 1
@@ -28,6 +38,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val settings = dao.getSettings()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsEntity())
+
+
 
     fun addList(name: String, onComplete: (Int) -> Unit = {}) {
         viewModelScope.launch {
@@ -68,6 +83,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 ?.items?.find { it.id == itemId }
                 ?.strike ?: false
             dao.updateItemStrike(itemId, !currentStrike)
+        }
+    }
+
+    fun updateSetting(darkMode: Boolean, barColor: Long) {
+        viewModelScope.launch {
+            dao.updateSetting(switch = darkMode, color = barColor)
         }
     }
 

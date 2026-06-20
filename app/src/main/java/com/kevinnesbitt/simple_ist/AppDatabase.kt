@@ -18,6 +18,13 @@ data class GroceryItemEntity(
     val strike: Boolean
 )
 
+@Entity(tableName = "settings")
+data class SettingsEntity(
+    @PrimaryKey val settingId: Int = 1,
+    val darkMode: Boolean = false,
+    val barColor: Long = 0xFFFFFF00L
+)
+
 @Dao
 interface GroceryDao {
     @Query("SELECT * FROM grocery_lists")
@@ -46,9 +53,21 @@ interface GroceryDao {
 
     @Query("UPDATE grocery_items SET strike = :strike WHERE id = :itemId")
     suspend fun updateItemStrike(itemId: Int, strike: Boolean)
+
+    @Query("UPDATE settings SET darkMode = :switch, barColor = :color WHERE settingId = 1")
+    suspend fun updateSetting(switch: Boolean, color: Long)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSettings(settings: SettingsEntity)
+
+    @Query("SELECT * FROM settings WHERE settingId = 1")
+    fun getSettings(): Flow<SettingsEntity>
+
+    @Query("SELECT * FROM settings WHERE settingId = 1")
+    suspend fun getSettingsOnce(): SettingsEntity?
 }
 
-@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class], version = 2)
+@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, SettingsEntity::class], version = 5)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun groceryDao(): GroceryDao
 
@@ -59,10 +78,12 @@ abstract class AppDatabase : RoomDatabase() {
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "grocery_database"
-                ).build().also { INSTANCE = it }
+                                context.applicationContext,
+                                AppDatabase::class.java,
+                                "grocery_database"
+                )
+                    .fallbackToDestructiveMigration(false)
+                    .build().also { INSTANCE = it }
             }
         }
     }

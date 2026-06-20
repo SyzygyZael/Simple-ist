@@ -5,6 +5,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.collection.mutableLongSetOf
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -14,9 +15,11 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -26,12 +29,14 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
+import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextField
 import androidx.compose.runtime.Composable
@@ -39,15 +44,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
@@ -156,6 +164,20 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                 .background(Color.Yellow),
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                Button(onClick = {
+                    navController.navigate("settings")
+                },
+                    modifier = Modifier.align(Alignment.CenterVertically),
+                    colors = ButtonColors(
+                        containerColor = Color.Yellow,
+                        contentColor = Color.Black,
+                        disabledContentColor = Color.Black,
+                        disabledContainerColor = Color.Yellow
+                    )
+                ) {
+                    Text(text = "⚙", fontSize = 27.sp)
+                }
+
                 Button(onClick = {
                     isAddingLst = true
                 },
@@ -618,7 +640,154 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
 
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
+    val settings by viewModel.settings.collectAsState()
 
+    val colorDict = mapOf(
+        "Black" to 0xFF000000L,
+        "White" to 0xFFFFFFFFL,
+        "Red" to 0xFFFF0000L,
+        "Green" to 0xFF00FF00L,
+        "Blue" to 0xFF0000FFL,
+        "Yellow" to 0xFFFFFF00L,
+        "Gray" to 0xFF808080L
+    )
+
+    var darkModeSwitch by remember(settings) {
+        mutableStateOf(settings.darkMode)
+    }
+
+    var barColorChoice by remember(settings) {
+        mutableLongStateOf(settings.barColor)
+    }
+
+    var barColorChoiceString by remember(settings) {
+        mutableStateOf(colorDict.entries.find { pair -> pair.value == settings.barColor }?.key?: "Yellow")
+    }
+
+    var isChoosingBarColor by remember {
+        mutableStateOf(false)
+    }
+
+    // var barColorChoiceTemp by remember {
+    //     mutableLongStateOf(settings.barColor)
+    // }
+
+    // var darkModeSwitchTemp by remember {
+    //     mutableStateOf(settings.darkMode)
+    // }
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+
+            // set up bottom bar
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.Yellow),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+            }
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+        ) {
+            // top bar name and buttons
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .background(Color.Yellow),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // back button
+                Button(
+                    onClick = {
+                        navController.navigate("home")
+                        viewModel.updateSetting(darkMode = darkModeSwitch, barColor = barColorChoice)
+                    },
+                    colors = ButtonColors(
+                        containerColor = Color.Yellow,
+                        contentColor = Color.Black,
+                        disabledContentColor = Color.Black,
+                        disabledContainerColor = Color.Yellow
+                    )
+                ) {
+                    Text(text = "Done", fontSize = 17.sp)
+                }
+
+                Text(text = "Settings",
+                    modifier = Modifier.weight(1f),
+                    textAlign = TextAlign.Center,
+                    fontSize = 27.sp,
+                    fontWeight = FontWeight.Bold
+                )
+                Text(text = "              ")
+            }
+
+            // SETTINGS
+
+            // dark mode switch
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Dark Mode", modifier = Modifier.padding(21.dp))
+                Switch(
+                    checked = darkModeSwitch,
+                    onCheckedChange = {
+                         darkModeSwitch = !darkModeSwitch
+                    },
+                    modifier = Modifier.padding(10.dp)
+                )
+            }
+
+            HorizontalDivider(thickness = 2.dp, color = Color.Black)
+
+            // bar color
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Bar Color", modifier = Modifier.padding(21.dp))
+                Card(
+                    border = BorderStroke(2.dp, color = Color.Gray),
+                    modifier = Modifier
+                        .size(120.dp, 60.dp)
+                        .padding(10.dp)
+                        .clickable(
+                            onClick = {
+                                isChoosingBarColor = true
+                            }
+                        )
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text(text = barColorChoiceString)
+                    }
+                    DropdownMenu(
+                        expanded = isChoosingBarColor,
+                        onDismissRequest = { isChoosingBarColor = false }
+                    ) {
+                        for (color in colorDict.keys) {
+                            DropdownMenuItem(
+                                text = { Text(text = color) },
+                                onClick = {
+                                    barColorChoice = colorDict[color]?:0xFFFFFF00L
+                                    barColorChoiceString = color
+                                    isChoosingBarColor = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(thickness = 2.dp, color = Color.Black)
+        }
+    }
 }
 
 @Preview(showBackground = true)
