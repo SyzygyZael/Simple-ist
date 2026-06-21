@@ -1,7 +1,6 @@
 package com.kevinnesbitt.simple_ist
 
 import android.app.Application
-import android.graphics.Color
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.flow.SharingStarted
