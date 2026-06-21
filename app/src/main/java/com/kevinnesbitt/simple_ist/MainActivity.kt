@@ -795,6 +795,51 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                             )
                         }
                     }
+
+                    // allow item creation upon pressing '+'
+                    if (isAddingItem) {
+                        item {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(text = "• ", fontSize = 19.sp, color = mainTextColor)
+
+                                val focusRequester = remember { FocusRequester() }
+
+                                BasicTextField(
+                                    value = itemName,
+                                    onValueChange = { text ->
+                                        itemName = text
+                                    },
+                                    keyboardOptions = KeyboardOptions(
+                                        imeAction = ImeAction.Done
+                                    ),
+                                    keyboardActions = KeyboardActions(
+                                        onDone = {
+                                            if (itemName != "") {
+                                                viewModel.addItem(
+                                                    listId = listId,
+                                                    itemName = itemName
+                                                )
+                                                itemName = ""
+                                            }
+                                        }
+                                    ),
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(10.dp)
+                                        .focusRequester(focusRequester),
+                                    textStyle = TextStyle(fontSize = 19.sp, color = mainTextColor),
+                                    singleLine = true
+                                )
+                                // request keyboard
+                                LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                            }
+                        }
+                    }
                 }
             } else if (!isAddingItem) {
 
