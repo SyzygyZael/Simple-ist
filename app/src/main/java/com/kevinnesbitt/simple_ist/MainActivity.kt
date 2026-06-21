@@ -814,7 +814,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                     } else if (randTextChooser == 5) {
                         Text(text = "A blank space is but a limitless sky...", color = Color.Gray)
                     } else if (randTextChooser == 6) {
-                        Text(text = "Hi Saman!", color = Color.Gray)
+                        Text(text = "Tap an item to cross it out!", color = Color.Gray)
                     }
                 }
             }
