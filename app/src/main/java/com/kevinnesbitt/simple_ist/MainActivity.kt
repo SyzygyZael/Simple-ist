@@ -1,5 +1,6 @@
 package com.kevinnesbitt.simple_ist
 
+import android.R
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -10,12 +11,14 @@ import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.gestures.FlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -48,6 +51,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.composed
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -152,9 +156,9 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
 
     var backgroundColor by remember(settings) {
         if (settings.darkMode) {
-            mutableStateOf(Color.Black)
+            mutableLongStateOf(0xFF111111L)
         } else {
-            mutableStateOf(Color.White)
+            mutableLongStateOf(0xFFFFFFFFL)
         }
     }
 
@@ -238,66 +242,80 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
         Column(modifier = Modifier
             .fillMaxSize()
             .padding(innerPadding)
-            .background(color = backgroundColor)
+            .background(color = Color(backgroundColor))
         ) {
             HorizontalDivider(thickness = 2.dp, color = Color.Gray)
 
             // add lists
             if (lsts.isNotEmpty()) {
-                lsts.forEach { groceryList ->
-                    Surface(
-                        shape = RoundedCornerShape(15.dp),
-                        border = BorderStroke(2.dp, Color.Gray),
-                        tonalElevation = 3.dp,
-                        modifier = Modifier
-                            .padding(3.dp)
-                    ) {
-                        Row(
+                LazyColumn(modifier = Modifier.imePadding()) {
+                    items(lsts) { groceryList ->
+                        Surface(
+                            shape = RoundedCornerShape(15.dp),
+                            border = BorderStroke(2.dp, Color.Gray),
+                            tonalElevation = 3.dp,
                             modifier = Modifier
-                                .fillMaxWidth()
-                                .background(color = Color.White)
-                                .combinedClickable(
-                                    onClick = { navController.navigate("list/${groceryList.id}") },
-                                    onLongClick = { expandedListId = groceryList.id }
-                                )
-                                .background(color = backgroundColor)
+                                .padding(3.dp)
                         ) {
                             Row(
-                                horizontalArrangement = Arrangement.Absolute.Left,
-                                modifier = Modifier.fillMaxWidth()
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .background(color = Color.White)
+                                    .combinedClickable(
+                                        onClick = { navController.navigate("list/${groceryList.id}") },
+                                        onLongClick = { expandedListId = groceryList.id }
+                                    )
+                                    .background(color = Color(backgroundColor))
                             ) {
-                                Text(
-                                    text = groceryList.name,
-                                    fontSize = 30.sp,
-                                    color = mainTextColor,
-                                    modifier = Modifier
-                                        .padding(10.dp)
+                                Row(
+                                    horizontalArrangement = Arrangement.Absolute.Left,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = groceryList.name,
+                                        fontSize = 25.sp,
+                                        color = mainTextColor,
+                                        modifier = Modifier
+                                            .padding(10.dp)
+                                    )
+                                }
+                            }
+                            // dropdown menu setup
+                            DropdownMenu(
+                                expanded = expandedListId == groceryList.id,
+                                onDismissRequest = { expandedListId = null },
+                                modifier = Modifier.background(color = Color.White)
+                            ) {
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "Delete",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    },
+                                    onClick = {
+                                        viewModel.deleteList(listId = groceryList.id)
+                                    }
+                                )
+
+                                HorizontalDivider(thickness = 1.dp, color = Color.Black)
+
+                                DropdownMenuItem(
+                                    text = {
+                                        Text(
+                                            text = "Rename",
+                                            fontSize = 18.sp,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    },
+                                    onClick = {
+                                        tempGroceryListId = groceryList.id
+                                        isChangingListName = true
+                                        expandedListId = null
+                                    }
                                 )
                             }
-                        }
-                        // dropdown menu setup
-                        DropdownMenu(
-                            expanded = expandedListId == groceryList.id,
-                            onDismissRequest = { expandedListId = null },
-                            modifier = Modifier.background(color = Color.White)
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(text = "Delete", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
-                                onClick = {
-                                    viewModel.deleteList(listId = groceryList.id)
-                                }
-                            )
-
-                            HorizontalDivider(thickness = 1.dp, color = Color.Black)
-
-                            DropdownMenuItem(
-                                text = { Text(text = "Rename", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
-                                onClick = {
-                                    tempGroceryListId = groceryList.id
-                                    isChangingListName = true
-                                    expandedListId = null
-                                }
-                            )
                         }
                     }
                 }
@@ -308,47 +326,6 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                 ) {
                     Text(text = "Tap '+' to get started!", color = Color.Gray)
                 }
-            }
-
-            // name creation on tapping '+'
-            if (isAddingLst) {
-                val focusRequester = remember { FocusRequester() }
-
-                TextField(
-                    value = lstName,
-                    onValueChange = { text ->
-                        lstName = text
-                    },
-                    keyboardOptions = KeyboardOptions(
-                        imeAction = ImeAction.Done
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onDone = {
-                            if (lstName.isNotBlank()) {
-                                // "ANY" RETURNS A BOOLEAN OMG
-                                val exists = viewModel.lists.value.any { it.name == lstName }
-
-                                if (!exists) {
-                                    viewModel.addList(name = lstName, onComplete = { newId ->
-                                        lstName = ""
-                                        isAddingLst = false
-                                        navController.navigate("list/${newId}")
-                                    })
-                                } else {
-                                    showDuplicateListNameDialog = true
-                                }
-                            }
-                        }
-                    ),
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .focusRequester(focusRequester),
-                    textStyle = TextStyle(fontSize = 20.sp),
-                    singleLine = true
-                )
-
-                // request keyboard
-                LaunchedEffect(Unit) { focusRequester.requestFocus() }
             }
 
             // DIALOG BOXES
@@ -404,7 +381,9 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                             TextField(
                                 value = newName,
                                 onValueChange = { text ->
-                                    newName = text
+                                    if (text.length <= 20) {
+                                        newName = text
+                                    }
                                 },
                                 keyboardOptions = KeyboardOptions(
                                     imeAction = ImeAction.Done
@@ -425,7 +404,8 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                 ),
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .focusRequester(focusRequester),
+                                    .focusRequester(focusRequester)
+                                    .padding(5.dp),
                                 textStyle = TextStyle(fontSize = 20.sp),
                                 singleLine = true,
                                 shape = RoundedCornerShape(20.dp)
@@ -434,7 +414,19 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                             // request keyboard
                             LaunchedEffect(Unit) { focusRequester.requestFocus() }
 
-                            Row(horizontalArrangement = Arrangement.Center, modifier = Modifier.fillMaxWidth()) {
+                            Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                                Button(
+                                    onClick = {
+                                        isChangingListName = false
+                                    },
+                                    colors = ButtonColors(containerColor = Color.DarkGray,
+                                        contentColor = Color.White,
+                                        disabledContentColor = Color.White,
+                                        disabledContainerColor = Color.DarkGray)
+                                ) {
+                                    Text(text = "Cancel")
+                                }
+
                                 Button(
                                     onClick = {
                                         if (newName.isNotBlank()) {
@@ -460,6 +452,111 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                     }
                 }
             }
+
+            // name creation on tapping '+'
+            if (isAddingLst) {
+                Dialog(
+                    onDismissRequest = { isChangingListName = false }
+                ) {
+                    Surface(
+                        color = Color.White,
+                        modifier = Modifier.size(350.dp, 200.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        border = BorderStroke(2.dp, Color.Gray)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Text(text = "Add List", textAlign = TextAlign.Center, fontSize = 21.sp, modifier = Modifier.fillMaxWidth(), fontWeight = FontWeight.Bold)
+
+                            val focusRequester = remember { FocusRequester() }
+
+                            TextField(
+                                value = lstName,
+                                onValueChange = { text ->
+                                    if (text.length <= 20) {
+                                        lstName = text
+                                    }
+                                },
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        if (lstName.isNotBlank()) {
+                                            // "ANY" RETURNS A BOOLEAN OMG
+                                            val exists = viewModel.lists.value.any { it.name == lstName }
+
+                                            if (!exists) {
+                                                viewModel.addList(name = lstName, onComplete = { newId ->
+                                                    lstName = ""
+                                                    isAddingLst = false
+                                                    navController.navigate("list/${newId}")
+                                                })
+                                            } else {
+                                                showDuplicateListNameDialog = true
+                                            }
+                                        }
+                                    }
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .padding(5.dp),
+                                textStyle = TextStyle(fontSize = 20.sp),
+                                singleLine = true,
+                                shape = RoundedCornerShape(20.dp)
+                            )
+
+                            // request keyboard
+                            LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+                            Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                                Button(
+                                    onClick = {
+                                        isAddingLst = false
+                                    },
+                                    colors = ButtonColors(containerColor = Color.DarkGray,
+                                        contentColor = Color.White,
+                                        disabledContentColor = Color.White,
+                                        disabledContainerColor = Color.DarkGray)
+                                ) {
+                                    Text(text = "Cancel")
+                                }
+
+                                Button(
+                                    onClick = {
+                                        if (lstName.isNotBlank()) {
+                                            // "ANY" RETURNS A BOOLEAN OMG
+                                            val exists = viewModel.lists.value.any { it.name == lstName }
+
+                                            if (!exists) {
+                                                viewModel.addList(name = lstName, onComplete = { newId ->
+                                                    lstName = ""
+                                                    isAddingLst = false
+                                                    navController.navigate("list/${newId}")
+                                                })
+                                            } else {
+                                                showDuplicateListNameDialog = true
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonColors(containerColor = Color.DarkGray,
+                                        contentColor = Color.White,
+                                        disabledContentColor = Color.White,
+                                        disabledContainerColor = Color.DarkGray)
+                                ) {
+                                    Text(text = " Done ")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
         }
     }
 }
@@ -491,9 +588,9 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
 
     var backgroundColor by remember(settings) {
         if (settings.darkMode) {
-            mutableStateOf(Color.Black)
+            mutableLongStateOf(0xFF111111L)
         } else {
-            mutableStateOf(Color.White)
+            mutableLongStateOf(0xFFFFFFFFL)
         }
     }
 
@@ -522,13 +619,19 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
     }
 
     Scaffold(
-        modifier = Modifier.fillMaxSize()
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .background(color = Color(settings.barColor))
+            ) { }
+        }
     ) { innerPadding ->
         // screen container setup
         Column(modifier = Modifier
             .fillMaxSize()
             .padding(innerPadding)
-            .background(color = backgroundColor)
+            .background(color = Color(backgroundColor))
         ) {
             // top bar list name and buttons
             Row(modifier = Modifier
@@ -547,7 +650,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                         disabledContainerColor = Color(settings.barColor)
                     )
                 ) {
-                    Text(text = "<", fontSize = 28.sp)
+                    Text(text = "Back", fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
 
                 // list name changing
@@ -557,7 +660,9 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                     BasicTextField(
                         value = newListName,
                         onValueChange = { text ->
-                            newListName = text },
+                            if (text.length <= 20) {
+                                newListName = text
+                            } },
                         keyboardOptions = KeyboardOptions(
                             imeAction = ImeAction.Done
                         ),
@@ -570,7 +675,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                             }
                         ),
                         textStyle = TextStyle(
-                            fontSize = 28.sp,
+                            fontSize = 26.sp,
                             color = barTextColor,
                             fontWeight = FontWeight.Bold,
                             textAlign = TextAlign.Center
@@ -586,8 +691,8 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
 
                 } else {
                     Text(
-                        text = "  $listName",
-                        fontSize = 28.sp,
+                        text = listName,
+                        fontSize = 26.sp,
                         color = barTextColor,
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
@@ -595,7 +700,8 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                                 viewModel.updateListName(listId = listId, newName = "")
                                 newListName = ""
                                 isChangingListName = true
-                            } )
+                            } ),
+                        textAlign = TextAlign.Center
                     )
                 }
 
@@ -617,7 +723,12 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                 } else {
                     Button(
                         onClick = {
-                            isAddingItem = false },
+                            if (itemName != "") {
+                                viewModel.addItem(listId = listId, itemName = itemName)
+                                itemName = ""
+                            }
+                            isAddingItem = false
+                        },
                         modifier = Modifier.align(Alignment.CenterVertically),
                         colors = ButtonColors(
                             containerColor = Color(settings.barColor),
@@ -633,12 +744,12 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
 
             // display list items
             if (itemLst.isNotEmpty()) {
-                LazyColumn {
+                LazyColumn(modifier = Modifier.imePadding()) {
                     items(itemLst) { groceryItem ->
                         if (groceryItem.strike) {
                             Text(
                                 text = "• " + groceryItem.itemName,
-                                fontSize = 21.sp,
+                                fontSize = 19.sp,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(10.dp)
@@ -657,7 +768,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                         } else {
                             Text(
                                 text = "• " + groceryItem.itemName,
-                                fontSize = 21.sp,
+                                fontSize = 19.sp,
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(10.dp)
@@ -718,7 +829,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                     .padding(10.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "• ", fontSize = 21.sp, color = mainTextColor)
+                    Text(text = "• ", fontSize = 19.sp, color = mainTextColor)
 
                     val focusRequester = remember { FocusRequester() }
 
@@ -742,7 +853,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                             .fillMaxWidth()
                             .padding(10.dp)
                             .focusRequester(focusRequester),
-                        textStyle = TextStyle(fontSize = 21.sp, color = mainTextColor),
+                        textStyle = TextStyle(fontSize = 19.sp, color = mainTextColor),
                         singleLine = true
                     )
                     // request keyboard
@@ -787,9 +898,9 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
 
     var backgroundColor by remember(settings) {
         if (settings.darkMode) {
-            mutableStateOf(Color.Black)
+            mutableLongStateOf(0xFF111111L)
         } else {
-            mutableStateOf(Color.White)
+            mutableLongStateOf(0xFFFFFFFFL)
         }
     }
 
@@ -809,14 +920,6 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
         mutableStateOf(false)
     }
 
-    // var barColorChoiceTemp by remember {
-    //     mutableLongStateOf(settings.barColor)
-    // }
-
-    // var darkModeSwitchTemp by remember {
-    //     mutableStateOf(settings.darkMode)
-    // }
-
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         bottomBar = {
@@ -833,7 +936,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(color = backgroundColor)
+                .background(color = Color(backgroundColor))
         ) {
             // top bar name and buttons
             Row(modifier = Modifier
@@ -855,7 +958,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                         disabledContainerColor = Color(settings.barColor)
                     )
                 ) {
-                    Text(text = "Save", fontSize = 17.sp)
+                    Text(text = "Save", fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Text(text = "Settings",
@@ -874,7 +977,9 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
 
             // dark mode switch
             Row(
-                modifier = Modifier.fillMaxWidth().background(color = backgroundColor),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color(backgroundColor)),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -892,7 +997,9 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
 
             // bar color
             Row(
-                modifier = Modifier.fillMaxWidth().background(color = backgroundColor),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color(backgroundColor)),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
