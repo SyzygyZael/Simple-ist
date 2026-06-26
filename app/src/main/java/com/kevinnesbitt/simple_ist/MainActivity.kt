@@ -1220,6 +1220,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         mutableStateOf(content)
     }
 
+    var bulletList by remember {
+        mutableStateOf(false)
+    }
+
     val density = LocalDensity.current
 
     val windowInfo = LocalWindowInfo.current
@@ -1341,11 +1345,18 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                         BasicTextField(
                             value = listText,
                             onValueChange = { text ->
-                                listText = text
+                                if (text.endsWith("\n") && bulletList) {
+                                    listText = "$text• "
+                                } else {
+                                    listText = text // continue trying to figure out this bullet list
+                                }
                                 viewModel.updateContent(listId, text)
                             },
                             keyboardOptions = KeyboardOptions(
                                 imeAction = ImeAction.Default
+                            ),
+                            keyboardActions = KeyboardActions(
+
                             ),
                             textStyle = TextStyle(
                                 fontSize = 20.sp,
@@ -1368,9 +1379,27 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                     Column(
                         modifier = Modifier
                             .size(60.dp, screenHeight)
-                            .background(color = Color(settings.barColor))
+                            .background(color = Color(settings.barColor)),
+                        horizontalAlignment = Alignment.CenterHorizontally
                     ) {
-
+                        Button(
+                            modifier = Modifier.size(55.dp, 55.dp),
+                            onClick = {
+                                bulletList = !bulletList
+                            },
+                            colors = ButtonColors(
+                                containerColor = if (!bulletList) Color(settings.barColor) else Color.LightGray.copy(0.5f),
+                                contentColor = barTextColor,
+                                disabledContentColor = barTextColor,
+                                disabledContainerColor = if (!bulletList) Color(settings.barColor) else Color.LightGray.copy(0.5f)
+                            ),
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = "⋮",
+                                fontSize = 23.sp
+                            )
+                        }
                     }
                 }
             }
