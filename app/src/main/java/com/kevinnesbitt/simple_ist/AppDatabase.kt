@@ -7,7 +7,8 @@ import kotlinx.coroutines.flow.Flow
 @Entity(tableName = "grocery_lists")
 data class GroceryListEntity(
     @PrimaryKey(autoGenerate = true) val id: Int,
-    val name: String
+    val name: String,
+    val listType: String
 )
 
 @Entity(tableName = "grocery_items")
@@ -16,6 +17,12 @@ data class GroceryItemEntity(
     val listId: Int,
     val itemName: String,
     val strike: Boolean
+)
+
+@Entity(tableName = "generic_list_content")
+data class GenericContentEntity(
+    @PrimaryKey(autoGenerate = false) val listId: Int,
+    val content: String
 )
 
 @Entity(tableName = "settings")
@@ -32,6 +39,12 @@ interface GroceryDao {
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertList(list: GroceryListEntity): Long
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertContent(content: GenericContentEntity)
+
+    @Query("SELECT * FROM generic_list_content")
+    fun getAllContent(): Flow<List<GenericContentEntity>>
 
     @Query("DELETE FROM grocery_items WHERE id = :listId")
     suspend fun deleteItemsByListId(listId: Int)
@@ -67,7 +80,7 @@ interface GroceryDao {
     suspend fun getSettingsOnce(): SettingsEntity?
 }
 
-@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, SettingsEntity::class], version = 5)
+@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class], version = 10)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun groceryDao(): GroceryDao
 
@@ -82,7 +95,7 @@ abstract class AppDatabase : RoomDatabase() {
                                 AppDatabase::class.java,
                                 "grocery_database"
                 )
-                    .fallbackToDestructiveMigration(false)
+                    .fallbackToDestructiveMigration(true)
                     .build().also { INSTANCE = it }
             }
         }

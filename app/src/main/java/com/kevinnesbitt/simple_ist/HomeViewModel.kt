@@ -3,9 +3,12 @@ package com.kevinnesbitt.simple_ist
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import androidx.room.BuiltInTypeConverters
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -32,7 +35,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     name = list.name,
                     items = items
                         .filter { it.listId == list.id }
-                        .map { ItemList(id = it.id, itemName = it.itemName, strike = it.strike) }
+                        .map { ItemList(id = it.id, itemName = it.itemName, strike = it.strike) },
+                    type = list.listType
+                )
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val contentList: StateFlow<List<ContentList>> = dao.getAllContent()
+        .map { contentLists ->
+            contentLists.map { content ->
+                ContentList(
+                    listId = content.listId,
+                    content = content.content
                 )
             }
         }
@@ -41,11 +56,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val settings = dao.getSettings()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsEntity())
 
-
-
-    fun addList(name: String, onComplete: (Int) -> Unit = {}) {
+    fun addList(name: String, type: String, onComplete: (Int) -> Unit = {}) {
         viewModelScope.launch {
-            val newId = dao.insertList(GroceryListEntity(id = 0, name = name))
+            val newId = dao.insertList(GroceryListEntity(id = 0, name = name, listType = type))
             onComplete(newId.toInt())
         }
     }
@@ -53,6 +66,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun addItem(listId: Int, itemName: String) {
         viewModelScope.launch {
             dao.insertItem(GroceryItemEntity(id = 0, listId = listId, itemName = itemName, strike = false))
+        }
+    }
+
+    fun updateContent(listId: Int, newContent: String) {
+        viewModelScope.launch {
+            dao.upsertContent(GenericContentEntity(listId = listId, content = newContent))
         }
     }
 
@@ -94,12 +113,18 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     data class GroceryList(
         val id: Int,
         val name: String,
-        val items: List<ItemList>
+        val items: List<ItemList>,
+        val type: String
     )
 
     data class ItemList(
         val id: Int,
         val itemName: String,
         val strike: Boolean
+    )
+
+    data class ContentList(
+        val listId: Int,
+        val content: String
     )
 }

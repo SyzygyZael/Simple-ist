@@ -1,26 +1,38 @@
 package com.kevinnesbitt.simple_ist
 
+import android.R
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideIn
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
@@ -29,8 +41,10 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardElevation
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Scaffold
@@ -49,20 +63,29 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavType
@@ -71,6 +94,8 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import kotlin.collections.emptyList
+import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -115,13 +140,19 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable(
-                        route = "list/{listId}",
-                        arguments = listOf(navArgument("listId") { type = NavType.IntType })
+                        route = "list/{listId}/{listType}",
+                        arguments = listOf(
+                            navArgument("listId") { type = NavType.IntType },
+                            navArgument("listType") { type = NavType.StringType }
+                        )
                     ) { backStackEntry ->
+                        val listId = backStackEntry.arguments?.getInt("listId")?: 0
+                        val listType = backStackEntry.arguments?.getString("listType")?:"grocery"
 
-                        val listId = backStackEntry.arguments?.getInt("listId") ?: 0
-
-                        ListScreen(listId = listId, navController = navController, viewModel)
+                        when (listType) {
+                            "grocery" -> GroceryListScreen(listId = listId, navController = navController, viewModel)
+                            "generic" -> GenericListScreen(listId = listId, navController = navController, viewModel)
+                        }
                     }
                 }
             }
@@ -171,7 +202,15 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
         mutableStateOf("")
     }
 
-    var isAddingLst by remember {
+    var isAddingGroceryLst by remember {
+        mutableStateOf(false)
+    }
+
+    var isAddingGenericLst by remember {
+        mutableStateOf(false)
+    }
+
+    var isChoosingListType by remember {
         mutableStateOf(false)
     }
 
@@ -200,37 +239,45 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
         bottomBar = {
 
             // set up bottom bar
-            Row(modifier = Modifier
-                .fillMaxWidth()
-                .background(color = Color(settings.barColor)),
-                horizontalArrangement = Arrangement.SpaceBetween
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color(backgroundColor)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
             ) {
                 Button(onClick = {
                     navController.navigate("settings")
                 },
                     modifier = Modifier.align(Alignment.CenterVertically),
                     colors = ButtonColors(
-                        containerColor = Color(settings.barColor),
-                        contentColor = barTextColor,
-                        disabledContentColor = barTextColor,
-                        disabledContainerColor = Color(settings.barColor)
-                    )
+                        containerColor = Color(backgroundColor),
+                        contentColor = mainTextColor,
+                        disabledContentColor = mainTextColor,
+                        disabledContainerColor = Color(backgroundColor)
+                    ),
+                    shape = CircleShape
                 ) {
                     Text(text = "⚙", fontSize = 27.sp)
                 }
 
-                Button(onClick = {
-                    isAddingLst = true
+                Button(
+                    onClick = {
+                    isChoosingListType = true
                 },
-                    modifier = Modifier.align(Alignment.CenterVertically),
+                    modifier = Modifier
+                        .align(Alignment.CenterVertically)
+                        .padding(18.dp)
+                        .size(70.dp, 70.dp),
                     colors = ButtonColors(
                         containerColor = Color(settings.barColor),
                         contentColor = barTextColor,
                         disabledContentColor = barTextColor,
                         disabledContainerColor = Color(settings.barColor)
-                    )
+                    ),
+                    shape = CircleShape
                 ) {
-                    Text(text = "+", fontSize = 27.sp)
+                    Text(text = "+", fontSize = 30.sp, textAlign = TextAlign.Center)
                 }
             }
         }
@@ -259,7 +306,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                     .fillMaxWidth()
                                     .background(color = Color.White)
                                     .combinedClickable(
-                                        onClick = { navController.navigate("list/${groceryList.id}") },
+                                        onClick = { navController.navigate("list/${groceryList.id}/${groceryList.type}") },
                                         onLongClick = { expandedListId = groceryList.id }
                                     )
                                     .background(color = Color(backgroundColor))
@@ -316,7 +363,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                         }
                     }
                 }
-            } else if (!isAddingLst) {
+            } else if (!isAddingGroceryLst || !isAddingGenericLst || !isChoosingListType) {
                 Box(modifier = Modifier
                     .fillMaxSize(),
                     contentAlignment = Alignment.Center
@@ -451,9 +498,115 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
             }
 
             // name creation on tapping '+'
-            if (isAddingLst) {
+            if (isChoosingListType) {
                 Dialog(
-                    onDismissRequest = { isChangingListName = false }
+                    onDismissRequest = { isChoosingListType = false }
+                ) {
+                    Surface(
+                        color = Color.White,
+                        modifier = Modifier.size(350.dp, 235.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        border = BorderStroke(2.dp, Color.Gray)
+                    ) {
+                        Column(
+
+                        ) {
+                            Row(
+                                horizontalArrangement = Arrangement.Center,
+                                modifier = Modifier
+                                    .size(350.dp, 40.dp)
+                                    .fillMaxWidth()
+                                    .padding(6.dp),
+                                verticalAlignment = Alignment.Bottom
+                            ) {
+                                Text(
+                                    text = "Choose a list type\n",
+                                    fontSize = 22.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(4.dp),
+                                horizontalArrangement = Arrangement.SpaceAround,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                ElevatedCard(
+                                    modifier = Modifier
+                                        .size(145.dp, 165.dp)
+                                        .clickable(
+                                            onClick = {
+                                                isAddingGroceryLst = true
+                                                isChoosingListType = false
+                                            }
+                                        )
+                                ) {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = "Grocery List",
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Text(
+                                            text = "A list specially tailored for those looking to make shopping lists! Includes automatic bullet points, and you can cross out items by tapping them.",
+                                            color = Color.Gray,
+                                            fontSize = 12.sp,
+                                            overflow = TextOverflow.Clip,
+                                            textAlign = TextAlign.Left,
+                                            modifier = Modifier
+                                                .padding(4.dp),
+                                            lineHeight = 17.sp
+                                        )
+                                    }
+                                }
+
+                                ElevatedCard(
+                                    modifier = Modifier
+                                        .size(145.dp, 165.dp)
+                                        .clickable(
+                                            onClick = {
+                                                isAddingGenericLst = true
+                                                isChoosingListType = false
+                                            }
+                                        )
+                                ) {
+                                    Column(
+                                        modifier = Modifier.fillMaxSize(),
+                                        horizontalAlignment = Alignment.CenterHorizontally
+                                    ) {
+                                        Text(
+                                            text = "Generic List",
+                                            fontSize = 15.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            textAlign = TextAlign.Center
+                                        )
+                                        Text(
+                                            text = "The traditional list for your everyday needs. Tap anywhere to start typing, and you can add different kinds of bullet points too. Just like your typical text editor.",
+                                            color = Color.Gray,
+                                            fontSize = 12.sp,
+                                            overflow = TextOverflow.Clip,
+                                            textAlign = TextAlign.Left,
+                                            modifier = Modifier
+                                                .padding(4.dp),
+                                            lineHeight = 17.sp
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (isAddingGroceryLst) {
+                Dialog(
+                    onDismissRequest = { isAddingGroceryLst = false }
                 ) {
                     Surface(
                         color = Color.White,
@@ -467,7 +620,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                 .padding(4.dp),
                             verticalArrangement = Arrangement.SpaceEvenly
                         ) {
-                            Text(text = "Add List", textAlign = TextAlign.Center, fontSize = 21.sp, modifier = Modifier.fillMaxWidth(), fontWeight = FontWeight.Bold)
+                            Text(text = "Add Grocery List", textAlign = TextAlign.Center, fontSize = 21.sp, modifier = Modifier.fillMaxWidth(), fontWeight = FontWeight.Bold)
 
                             val focusRequester = remember { FocusRequester() }
 
@@ -488,10 +641,10 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                             val exists = viewModel.lists.value.any { it.name == lstName }
 
                                             if (!exists) {
-                                                viewModel.addList(name = lstName, onComplete = { newId ->
+                                                viewModel.addList(name = lstName, type = "grocery", onComplete = { newId ->
                                                     lstName = ""
-                                                    isAddingLst = false
-                                                    navController.navigate("list/${newId}")
+                                                    isAddingGroceryLst = false
+                                                    navController.navigate("list/${newId}/grocery")
                                                 })
                                             } else {
                                                 showDuplicateListNameDialog = true
@@ -514,7 +667,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                             Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
                                 Button(
                                     onClick = {
-                                        isAddingLst = false
+                                        isAddingGroceryLst = false
                                     },
                                     colors = ButtonColors(containerColor = Color.DarkGray,
                                         contentColor = Color.White,
@@ -531,10 +684,10 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                             val exists = viewModel.lists.value.any { it.name == lstName }
 
                                             if (!exists) {
-                                                viewModel.addList(name = lstName, onComplete = { newId ->
+                                                viewModel.addList(name = lstName, type = "grocery",onComplete = { newId ->
                                                     lstName = ""
-                                                    isAddingLst = false
-                                                    navController.navigate("list/${newId}")
+                                                    isAddingGroceryLst = false
+                                                    navController.navigate("list/${newId}/grocery")
                                                 })
                                             } else {
                                                 showDuplicateListNameDialog = true
@@ -554,13 +707,115 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                 }
             }
 
+            if (isAddingGenericLst) {
+                Dialog(
+                    onDismissRequest = { isAddingGenericLst = false }
+                ) {
+                    Surface(
+                        color = Color.White,
+                        modifier = Modifier.size(350.dp, 200.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        border = BorderStroke(2.dp, Color.Gray)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly
+                        ) {
+                            Text(text = "Add Generic List", textAlign = TextAlign.Center, fontSize = 21.sp, modifier = Modifier.fillMaxWidth(), fontWeight = FontWeight.Bold)
+
+                            val focusRequester = remember { FocusRequester() }
+
+                            TextField(
+                                value = lstName,
+                                onValueChange = { text ->
+                                    if (text.length <= 20) {
+                                        lstName = text
+                                    }
+                                },
+                                keyboardOptions = KeyboardOptions(
+                                    imeAction = ImeAction.Done
+                                ),
+                                keyboardActions = KeyboardActions(
+                                    onDone = {
+                                        if (lstName.isNotBlank()) {
+                                            // "ANY" RETURNS A BOOLEAN OMG
+                                            val exists = viewModel.lists.value.any { it.name == lstName }
+
+                                            if (!exists) {
+                                                viewModel.addList(name = lstName, type = "generic", onComplete = { newId ->
+                                                    lstName = ""
+                                                    isAddingGenericLst = false
+                                                    navController.navigate("list/${newId}/generic")
+                                                })
+                                            } else {
+                                                showDuplicateListNameDialog = true
+                                            }
+                                        }
+                                    }
+                                ),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .focusRequester(focusRequester)
+                                    .padding(5.dp),
+                                textStyle = TextStyle(fontSize = 20.sp),
+                                singleLine = true,
+                                shape = RoundedCornerShape(20.dp)
+                            )
+
+                            // request keyboard
+                            LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+                            Row(horizontalArrangement = Arrangement.SpaceEvenly, modifier = Modifier.fillMaxWidth()) {
+                                Button(
+                                    onClick = {
+                                        isAddingGenericLst = false
+                                    },
+                                    colors = ButtonColors(containerColor = Color.DarkGray,
+                                        contentColor = Color.White,
+                                        disabledContentColor = Color.White,
+                                        disabledContainerColor = Color.DarkGray)
+                                ) {
+                                    Text(text = "Cancel")
+                                }
+
+                                Button(
+                                    onClick = {
+                                        if (lstName.isNotBlank()) {
+                                            // "ANY" RETURNS A BOOLEAN OMG
+                                            val exists = viewModel.lists.value.any { it.name == lstName }
+
+                                            if (!exists) {
+                                                viewModel.addList(name = lstName, type = "generic", onComplete = { newId ->
+                                                    lstName = ""
+                                                    isAddingGenericLst = false
+                                                    navController.navigate("list/${newId}/generic")
+                                                })
+                                            } else {
+                                                showDuplicateListNameDialog = true
+                                            }
+                                        }
+                                    },
+                                    colors = ButtonColors(containerColor = Color.DarkGray,
+                                        contentColor = Color.White,
+                                        disabledContentColor = Color.White,
+                                        disabledContainerColor = Color.DarkGray)
+                                ) {
+                                    Text(text = " Done ")
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewModel) {
+fun GroceryListScreen(listId: Int, navController: NavController, viewModel: HomeViewModel) {
     val groceryListObj = viewModel.lists.collectAsState().value.find { it.id == listId }
     val itemLst = groceryListObj?.items?: emptyList()
     val listName = groceryListObj?.name?: ""
@@ -629,6 +884,13 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
             .fillMaxSize()
             .padding(innerPadding)
             .background(color = Color(backgroundColor))
+            .clickable(
+                indication = null,
+                onClick = {
+                    isAddingItem = true
+                },
+                interactionSource = remember { MutableInteractionSource() }
+            )
         ) {
             // top bar list name and buttons
             Row(modifier = Modifier
@@ -715,7 +977,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                             disabledContainerColor = Color(settings.barColor)
                         )
                     ) {
-                        Text(text = "+", fontSize = 24.sp)
+                        Text(text = "+", fontSize = 28.sp)
                     }
                 } else {
                     Button(
@@ -734,7 +996,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                             disabledContainerColor = Color(settings.barColor)
                         )
                     ) {
-                        Text(text = "Done", fontSize = 18.sp)
+                        Text(text = "Done", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
                 }
             }
@@ -849,7 +1111,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                     contentAlignment = Alignment.Center
                 ) {
                     if (randTextChooser == 1) {
-                        Text(text = "Tap '+' to get started!", color = Color.Gray)
+                        Text(text = "Tap '+' or on the screen to get started!", color = Color.Gray)
                     } else if (randTextChooser == 2) {
                         Text(text = "What are you shopping for today?", color = Color.Gray)
                     } else if (randTextChooser == 3) {
@@ -865,7 +1127,7 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
             }
 
             // allow item creation upon pressing '+'
-            if (isAddingItem) {
+            if (isAddingItem && itemLst.isEmpty()) {
                 Row(modifier = Modifier
                     .fillMaxWidth()
                     .padding(10.dp),
@@ -900,6 +1162,216 @@ fun ListScreen(listId: Int, navController: NavController, viewModel: HomeViewMod
                     )
                     // request keyboard
                     LaunchedEffect(Unit) { focusRequester.requestFocus() }
+                }
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun GenericListScreen(listId: Int, navController: NavController, viewModel: HomeViewModel) {
+    val groceryListObj = viewModel.lists.collectAsState().value.find { it.id == listId }
+    val itemLst = groceryListObj?.items?: emptyList()
+    val listName = groceryListObj?.name?: ""
+
+    val contentListObj = viewModel.contentList.collectAsState().value.find { it.listId == listId }
+    val content = contentListObj?.content?: ""
+
+    val settings by viewModel.settings.collectAsState()
+
+    var barTextColor by remember(settings) {
+        if (settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
+            mutableStateOf(Color.White)
+        } else {
+            mutableStateOf(Color.Black)
+        }
+    }
+
+    var mainTextColor by remember(settings) {
+        if (settings.darkMode) {
+            mutableStateOf(Color.White)
+        } else {
+            mutableStateOf(Color.Black)
+        }
+    }
+
+    var backgroundColor by remember(settings) {
+        if (settings.darkMode) {
+            mutableLongStateOf(0xFF111111L)
+        } else {
+            mutableLongStateOf(0xFFFFFFFFL)
+        }
+    }
+
+    var isChangingListName by remember {
+        mutableStateOf(false)
+    }
+
+    var newListName by remember {
+        mutableStateOf("")
+    }
+
+    var showSideBar by remember {
+        mutableStateOf(false)
+    }
+
+    var listText by remember {
+        mutableStateOf(content)
+    }
+
+    val density = LocalDensity.current
+
+    val windowInfo = LocalWindowInfo.current
+    val screenWidth = windowInfo.containerDpSize.width
+    val screenHeight = windowInfo.containerDpSize.height
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        bottomBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color(backgroundColor))
+            ) { }
+        }
+    ) { innerPadding ->
+        // screen container setup
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(color = Color(backgroundColor))
+        ) {
+            // top bar list name and buttons
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(settings.barColor)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // back button
+                Button(
+                    onClick = {
+                        navController.navigate("home")
+                    },
+                    colors = ButtonColors(
+                        containerColor = Color(settings.barColor),
+                        contentColor = barTextColor,
+                        disabledContentColor = barTextColor,
+                        disabledContainerColor = Color(settings.barColor)
+                    )
+                ) {
+                    Text(text = "Back", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+
+
+                // list name changing
+                if (isChangingListName) {
+                    val focusRequester = remember { FocusRequester() }
+
+                    BasicTextField(
+                        value = newListName,
+                        onValueChange = { text ->
+                            if (text.length <= 20) {
+                                newListName = text
+                            } },
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (newListName.isNotBlank()) {
+                                    viewModel.updateListName(listId = listId, newName = newListName)
+                                    isChangingListName = false
+                                }
+                            }
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = 26.sp,
+                            color = barTextColor,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        ),
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequester)
+                    )
+
+                    // request keyboard as soon as text field appears
+                    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+                } else {
+                    Text(
+                        text = listName,
+                        fontSize = 26.sp,
+                        color = barTextColor,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable( onClick = {
+                                viewModel.updateListName(listId = listId, newName = "")
+                                newListName = ""
+                                isChangingListName = true
+                            } ),
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                // menu button
+                Button(
+                    onClick = { showSideBar = !showSideBar },
+                    colors = ButtonColors(
+                        containerColor = Color(settings.barColor),
+                        contentColor = barTextColor,
+                        disabledContentColor = barTextColor,
+                        disabledContainerColor = Color(settings.barColor)
+                    )
+                ) {
+                    Text(text = "☰", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            Row(
+                modifier = Modifier
+                    .fillMaxSize()
+            ) {
+                LazyColumn(modifier = Modifier.imePadding()) {
+                    item {
+                        BasicTextField(
+                            value = listText,
+                            onValueChange = { text ->
+                                listText = text
+                                viewModel.updateContent(listId, text)
+                            },
+                            keyboardOptions = KeyboardOptions(
+                                imeAction = ImeAction.Default
+                            ),
+                            textStyle = TextStyle(
+                                fontSize = 20.sp,
+                                color = mainTextColor
+                            ),
+                            modifier = Modifier
+                                .size(screenWidth - 60.dp, screenHeight)
+                                .padding(8.dp),
+                            cursorBrush = SolidColor(mainTextColor)
+                        )
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = showSideBar,
+                    enter = slideInHorizontally { with(density) { 60.dp.roundToPx() } },
+                    exit = slideOutHorizontally { with(density) { 60.dp.roundToPx() } }
+
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .size(60.dp, screenHeight)
+                            .background(color = Color(settings.barColor))
+                    ) {
+
+                    }
                 }
             }
         }
