@@ -58,6 +58,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -71,6 +72,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -94,6 +96,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.kevinnesbitt.simple_ist.ui.TextVisualTransformation
 import kotlin.collections.emptyList
 import kotlin.math.sin
 
@@ -167,7 +170,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
     val settings by viewModel.settings.collectAsState()
 
     var barTextColor by remember(settings) {
-        if (settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
+        if (settings.barColor == 0xFF111111L || settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
             mutableStateOf(Color.White)
         } else {
             mutableStateOf(Color.Black)
@@ -312,13 +315,22 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                     .background(color = Color(backgroundColor))
                             ) {
                                 Row(
-                                    horizontalArrangement = Arrangement.Absolute.Left,
+                                    horizontalArrangement = Arrangement.SpaceBetween,
+                                    verticalAlignment = Alignment.CenterVertically,
                                     modifier = Modifier.fillMaxWidth()
                                 ) {
                                     Text(
                                         text = groceryList.name,
                                         fontSize = 25.sp,
                                         color = mainTextColor,
+                                        modifier = Modifier
+                                            .padding(10.dp)
+                                    )
+
+                                    Text(
+                                        text = if (groceryList.type == "grocery") "Grocery List" else "Generic List",
+                                        fontSize = 18.sp,
+                                        color = Color.Gray,
                                         modifier = Modifier
                                             .padding(10.dp)
                                     )
@@ -823,7 +835,7 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
     val settings by viewModel.settings.collectAsState()
 
     var barTextColor by remember(settings) {
-        if (settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
+        if (settings.barColor == 0xFF111111L || settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
             mutableStateOf(Color.White)
         } else {
             mutableStateOf(Color.Black)
@@ -1095,7 +1107,8 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
                                         .padding(10.dp)
                                         .focusRequester(focusRequester),
                                     textStyle = TextStyle(fontSize = 19.sp, color = mainTextColor),
-                                    singleLine = true
+                                    singleLine = true,
+                                    cursorBrush = SolidColor(mainTextColor)
                                 )
                                 // request keyboard
                                 LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -1158,7 +1171,8 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
                             .padding(10.dp)
                             .focusRequester(focusRequester),
                         textStyle = TextStyle(fontSize = 19.sp, color = mainTextColor),
-                        singleLine = true
+                        singleLine = true,
+                        cursorBrush = SolidColor(mainTextColor)
                     )
                     // request keyboard
                     LaunchedEffect(Unit) { focusRequester.requestFocus() }
@@ -1177,11 +1191,12 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 
     val contentListObj = viewModel.contentList.collectAsState().value.find { it.listId == listId }
     val content = contentListObj?.content?: ""
+    val ranges = contentListObj?.transformationRanges?: emptyList()
 
     val settings by viewModel.settings.collectAsState()
 
     var barTextColor by remember(settings) {
-        if (settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
+        if (settings.barColor == 0xFF111111L || settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
             mutableStateOf(Color.White)
         } else {
             mutableStateOf(Color.Black)
@@ -1217,11 +1232,33 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
     }
 
     var listText by remember {
-        mutableStateOf(content)
+        mutableStateOf(TextFieldValue(text = content, selection = TextRange(2)))
     }
 
     var bulletList by remember {
         mutableStateOf(false)
+    }
+
+    var boldLetters by remember {
+        mutableStateOf(false)
+    }
+
+    var italicLetters by remember {
+        mutableStateOf(false)
+    }
+
+    var underlineLetters by remember {
+        mutableStateOf(false)
+    }
+
+    val localRanges = remember {
+        mutableStateListOf<HomeViewModel.TransformationRanges>()
+    }
+
+    LaunchedEffect(ranges) {
+        if (localRanges.isEmpty() && ranges.isNotEmpty()) {
+            localRanges.addAll(ranges)
+        }
     }
 
     val density = LocalDensity.current
@@ -1268,7 +1305,6 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                 ) {
                     Text(text = "Back", fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
-
 
                 // list name changing
                 if (isChangingListName) {
@@ -1344,13 +1380,90 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                     item {
                         BasicTextField(
                             value = listText,
-                            onValueChange = { text ->
-                                if (text.endsWith("\n") && bulletList) {
-                                    listText = "$text• "
-                                } else {
-                                    listText = text // continue trying to figure out this bullet list
+                            onValueChange = { newText ->
+                                val currentText = newText.text
+                                val oldText = listText.text
+                                val cursorPos = newText.selection.start
+
+                                if (currentText.length > oldText.length && (boldLetters || italicLetters || underlineLetters)) {
+                                    val typedIndex = cursorPos - 1
+                                    val lastRange = ranges.lastOrNull()
+
+                                    if (lastRange != null && lastRange.end == typedIndex) {
+                                        val index = ranges.lastIndex
+                                        val updatedRange = lastRange.copy(end = cursorPos)
+
+                                        localRanges[index] = updatedRange
+
+                                        viewModel.updateRange(index, lastRange.start, cursorPos)
+                                    } else {
+                                        val decorType = when {
+                                            boldLetters -> { "bold" }
+                                            italicLetters -> { "italic" }
+                                            else -> { "underline" }
+                                        }
+
+                                        val newRange = HomeViewModel.TransformationRanges(id = 0, listId, decorType, typedIndex, cursorPos)
+                                        localRanges.add(newRange)
+
+                                        viewModel.addTransformationRange(listId, decorType, typedIndex, cursorPos)
+                                    }
+                                } else if (currentText.length < oldText.length) {
+                                    val deletedIndex = cursorPos
+
+                                    // 2. Find the index of the range that contained the deleted letter
+                                    val targetRangeIndex = localRanges.indexOfFirst { range ->
+                                        deletedIndex >= range.start && deletedIndex < range.end
+                                    }
+
+                                    if (targetRangeIndex != -1) {
+                                        val affectedRange = localRanges[targetRangeIndex]
+
+                                        // If the range only had 1 character left, remove it entirely
+                                        if (affectedRange.start == affectedRange.end - 1) {
+                                            localRanges.removeAt(targetRangeIndex)
+                                            viewModel.deleteTransformationRange(affectedRange.id) // Call your DAO delete query
+                                        } else {
+                                            // Shrink the affected range by 1
+                                            val updatedRange = affectedRange.copy(end = affectedRange.end - 1)
+                                            localRanges[targetRangeIndex] = updatedRange
+                                            viewModel.updateRange(targetRangeIndex, updatedRange.start, updatedRange.end)
+                                        }
+                                    }
+
+                                    // 3. CRITICAL STEP: Shift ALL formatting ranges that come after the deletion point backward by 1
+                                    for (i in localRanges.indices) {
+                                        val range = localRanges[i]
+                                        if (range.start > deletedIndex) {
+                                            val shiftedRange = range.copy(start = range.start - 1, end = range.end - 1)
+                                            localRanges[i] = shiftedRange
+                                            // Update the database to reflect the shifted positions
+                                            viewModel.updateRange(i, shiftedRange.start, shiftedRange.end)
+                                        }
+                                    }
                                 }
-                                viewModel.updateContent(listId, text)
+
+                                val updatedText = when {
+                                    currentText.endsWith("\n") && bulletList-> {
+                                        "$currentText    • "
+                                    }
+
+                                    oldText.endsWith("\n    • ") && currentText.length < oldText.length -> {
+                                        currentText.dropLast(5)
+                                    }
+
+                                    currentText.isEmpty() -> {
+                                        ""
+                                    }
+
+                                    else -> {
+                                        currentText
+                                    }
+                                }
+
+                                listText = TextFieldValue(text = updatedText, selection = TextRange(updatedText.length))
+
+                                viewModel.updateContent(listId, updatedText)
                             },
                             keyboardOptions = KeyboardOptions(
                                 imeAction = ImeAction.Default
@@ -1365,7 +1478,8 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             modifier = Modifier
                                 .size(screenWidth - 60.dp, screenHeight)
                                 .padding(8.dp),
-                            cursorBrush = SolidColor(mainTextColor)
+                            cursorBrush = SolidColor(mainTextColor),
+                            visualTransformation = TextVisualTransformation(localRanges)
                         )
                     }
                 }
@@ -1386,6 +1500,17 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             modifier = Modifier.size(55.dp, 55.dp),
                             onClick = {
                                 bulletList = !bulletList
+
+                                if (bulletList && listText.text.endsWith("\n")) {
+                                    listText = TextFieldValue(text = listText.text + "    • ", selection = TextRange(listText.text.length + 6))
+                                    viewModel.updateContent(listId, listText.text)
+                                } else if (bulletList && listText.text.isEmpty()) {
+                                    listText = TextFieldValue(text = "    • ", selection = TextRange(listText.text.length + 6))
+                                    viewModel.updateContent(listId, listText.text)
+                                } else if (bulletList) {
+                                    listText = TextFieldValue(text = listText.text + "\n    • ", selection = TextRange(listText.text.length + 7))
+                                    viewModel.updateContent(listId, listText.text)
+                                }
                             },
                             colors = ButtonColors(
                                 containerColor = if (!bulletList) Color(settings.barColor) else Color.LightGray.copy(0.5f),
@@ -1398,6 +1523,73 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             Text(
                                 text = "⋮",
                                 fontSize = 23.sp
+                            )
+                        }
+
+                        Button(
+                            modifier = Modifier
+                                .size(55.dp, 55.dp),
+                            onClick = {
+                                boldLetters = !boldLetters
+                                italicLetters = false
+                                underlineLetters = false
+                            },
+                            colors = ButtonColors(
+                                containerColor = if (!boldLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f),
+                                contentColor = barTextColor,
+                                disabledContentColor = barTextColor,
+                                disabledContainerColor = if (!boldLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f)
+                            ),
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = "B",
+                                fontSize = 23.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        Button(
+                            modifier = Modifier.size(55.dp, 55.dp),
+                            onClick = {
+                                italicLetters = !italicLetters
+                                boldLetters = false
+                                underlineLetters = false
+                            },
+                            colors = ButtonColors(
+                                containerColor = if (!italicLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f),
+                                contentColor = barTextColor,
+                                disabledContentColor = barTextColor,
+                                disabledContainerColor = if (!italicLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f)
+                            ),
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = "\uD835\uDC70",
+                                fontSize = 23.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        Button(
+                            modifier = Modifier.size(55.dp, 55.dp),
+                            onClick = {
+                                underlineLetters = !underlineLetters
+                                italicLetters = false
+                                boldLetters = false
+                            },
+                            colors = ButtonColors(
+                                containerColor = if (!underlineLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f),
+                                contentColor = barTextColor,
+                                disabledContentColor = barTextColor,
+                                disabledContainerColor = if (!underlineLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f)
+                            ),
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = "U̲",
+                                fontSize = 23.sp,
+                                textAlign = TextAlign.Center
                             )
                         }
                     }
@@ -1419,12 +1611,13 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
         "Blue" to 0xFF0000FFL,
         "Yellow" to 0xFFFFFF00L,
         "Gray" to 0xFF808080L,
+        "Dark Gray" to 0xFF111111L,
         "Pink" to 0xFFFF69B4L,
         "Royal Purple" to 0xFF7851A9L
     )
 
     var barTextColor by remember(settings) {
-        if (settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor ==  0xFF7851A9L ) {
+        if (settings.barColor == 0xFF111111L || settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor ==  0xFF7851A9L ) {
             mutableStateOf(Color.White)
         } else {
             mutableStateOf(Color.Black)

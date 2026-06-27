@@ -43,11 +43,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
     val contentList: StateFlow<List<ContentList>> = dao.getAllContent()
-        .map { contentLists ->
+        .combine(dao.getAllTransformationRanges()) { contentLists, transformationRanges ->
             contentLists.map { content ->
                 ContentList(
                     listId = content.listId,
-                    content = content.content
+                    content = content.content,
+                    transformationRanges = transformationRanges
+                        .filter { it.listId == content.listId }
+                        .map { TransformationRanges(id = it.id, listId = it.listId, type = it.type, start = it.start, end = it.endIndex) }
                 )
             }
         }
@@ -72,6 +75,24 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun updateContent(listId: Int, newContent: String) {
         viewModelScope.launch {
             dao.upsertContent(GenericContentEntity(listId = listId, content = newContent))
+        }
+    }
+
+    fun addTransformationRange(listId: Int, type: String, start: Int, end: Int) {
+        viewModelScope.launch {
+            dao.insertTransformationRange(TransformationRangesEntity(type = type, listId = listId, start = start, endIndex = end))
+        }
+    }
+
+    fun deleteTransformationRange(id: Int) {
+        viewModelScope.launch {
+            dao.deleteTransformationRange(id)
+        }
+    }
+
+    fun updateRange(id: Int, start: Int, end: Int) {
+        viewModelScope.launch {
+            dao.updateRange(id =  id, start = start, end = end)
         }
     }
 
@@ -123,8 +144,17 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val strike: Boolean
     )
 
+    data class TransformationRanges(
+        val id: Int,
+        val listId: Int,
+        val type: String,
+        val start: Int,
+        val end: Int
+    )
+
     data class ContentList(
         val listId: Int,
-        val content: String
+        val content: String,
+        val transformationRanges: List<TransformationRanges>
     )
 }
