@@ -1379,33 +1379,51 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 if (underlineLetters) decorType += "underline"
                                 if (bigHeader) decorType += "bigHeader"
                                 if (biggerHeader) decorType += "biggerHeader"
-                                if (currentText.length > oldText.length && (boldLetters || italicLetters || underlineLetters || bigHeader || biggerHeader)) {
-                                    val typedIndex = cursorPos - 1
-                                    val lastRange = localRanges.lastOrNull()
 
-                                    if (lastRange != null && lastRange.end == typedIndex && lastRange.type == decorType) {
-                                        // extend existing range
-                                        val updatedRange = lastRange.copy(end = cursorPos)
-                                        localRanges[localRanges.lastIndex] = updatedRange
-                                        viewModel.updateRange(lastRange.id, lastRange.start, cursorPos)
-                                    } else {
-                                        // create new range
+                                // === NEW MID-TEXT TYPING LOGIC STARTS HERE ===
+                                if (currentText.length > oldText.length) {
+                                    val typedIndex = cursorPos - 1
+
+                                    // 1. Look for an existing formatting range that the cursor is currently inside of
+                                    val targetRangeIndex = localRanges.indexOfFirst { range ->
+                                        typedIndex >= range.start && typedIndex <= range.end
+                                    }
+
+                                    if (targetRangeIndex != -1 && localRanges[targetRangeIndex].type == decorType) {
+                                        // SCENARIO A: Typing inside a range of the SAME style -> Expand its boundary by 1
+                                        val affectedRange = localRanges[targetRangeIndex]
+                                        val updatedRange = affectedRange.copy(end = affectedRange.end + 1)
+                                        localRanges[targetRangeIndex] = updatedRange
+                                        viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
+                                    } else if (decorType.isNotEmpty()) {
+                                        // SCENARIO B: Typing with active styles where no matching range exists -> Create new
                                         android.util.Log.d("Decor Type", "type = $decorType")
                                         val newRange = HomeViewModel.TransformationRanges(id = 0, listId, decorType, typedIndex, cursorPos)
                                         localRanges.add(newRange)
 
                                         viewModel.addTransformationRange(listId, decorType, typedIndex, cursorPos) { realId ->
-                                            // update the localRange with the real database id
                                             val index = localRanges.indexOfFirst { it.id == 0 && it.start == typedIndex }
                                             if (index != -1) {
                                                 localRanges[index] = localRanges[index].copy(id = realId)
                                             }
                                         }
                                     }
+
+                                    // Shift ALL formatting ranges that start AFTER your typing position forward by 1
+                                    for (i in localRanges.indices) {
+                                        val range = localRanges[i]
+                                        if (range.start >= typedIndex && i != targetRangeIndex && range.id != 0) {
+                                            val shiftedRange = range.copy(start = range.start + 1, end = range.end + 1)
+                                            localRanges[i] = shiftedRange
+                                            viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
+                                        }
+                                    }
+                                    // === NEW MID-TEXT TYPING LOGIC ENDS HERE ===
+
                                 } else if (currentText.length < oldText.length) {
                                     val deletedIndex = cursorPos
 
-                                    // 2. Find the index of the range that contained the deleted letter
+                                    // Find the index of the range that contained the deleted letter
                                     val targetRangeIndex = localRanges.indexOfFirst { range ->
                                         deletedIndex >= range.start && deletedIndex < range.end
                                     }
@@ -1416,7 +1434,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                         // If the range only had 1 character left, remove it entirely
                                         if (affectedRange.start == affectedRange.end - 1) {
                                             localRanges.removeAt(targetRangeIndex)
-                                            viewModel.deleteTransformationRange(affectedRange.id) // Call your DAO delete query
+                                            viewModel.deleteTransformationRange(affectedRange.id)
                                         } else {
                                             // Shrink the affected range by 1
                                             val updatedRange = affectedRange.copy(end = affectedRange.end - 1)
@@ -1425,37 +1443,35 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                         }
                                     }
 
-                                    // 3. CRITICAL STEP: Shift ALL formatting ranges that come after the deletion point backward by 1
+                                    // Shift ALL formatting ranges that come after the deletion point backward by 1
                                     for (i in localRanges.indices) {
                                         val range = localRanges[i]
                                         if (range.start > deletedIndex) {
                                             val shiftedRange = range.copy(start = range.start - 1, end = range.end - 1)
                                             localRanges[i] = shiftedRange
-                                            // Update the database to reflect the shifted positions
                                             viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
                                         }
                                     }
                                 }
 
+                                // Process bullet indentation markers
                                 val updatedText = when {
-                                    currentText.endsWith("\n") && bulletList-> {
+                                    currentText.endsWith("\n") && bulletList -> {
                                         "$currentText    • "
                                     }
-
                                     oldText.endsWith("\n    • ") && currentText.length < oldText.length -> {
                                         currentText.dropLast(5)
                                     }
-
                                     currentText.isEmpty() -> {
                                         ""
                                     }
-
                                     else -> {
                                         currentText
                                     }
                                 }
 
-                                listText = TextFieldValue(text = updatedText, selection = TextRange(updatedText.length))
+                                // Safely copy state while fully preserving dynamic cursor location
+                                listText = newText.copy(text = updatedText)
 
                                 viewModel.updateContent(listId, updatedText)
                             },
