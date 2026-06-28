@@ -140,9 +140,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateSetting(darkMode: Boolean, barColor: Long, widgetDisplayListId: Int) {
+    fun updateSetting(darkMode: Boolean, barColor: Long, widgetDisplayListId: Int, barTextColor: Long) {
         viewModelScope.launch {
-            dao.updateSetting(switch = darkMode, color = barColor, widgetDisplayListId = widgetDisplayListId)
+            dao.updateSetting(switch = darkMode, color = barColor, widgetDisplayListId = widgetDisplayListId, barTextColor = barTextColor)
             GlanceWidget().updateAll(getApplication())
         }
     }

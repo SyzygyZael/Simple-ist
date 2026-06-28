@@ -1,6 +1,5 @@
 package com.kevinnesbitt.simple_ist
 
-import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -129,7 +128,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable("settings") {
-                        SettingsScreen(navController, viewModel, application)
+                        SettingsScreen(navController, viewModel)
                     }
 
                     composable(
@@ -160,11 +159,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
     val settings by viewModel.settings.collectAsState()
 
     var barTextColor by remember(settings) {
-        if (settings.barColor == 0xFF111111L || settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
-            mutableStateOf(Color.White)
-        } else {
-            mutableStateOf(Color.Black)
-        }
+        mutableStateOf(Color(settings.barTextColor))
     }
 
     var mainTextColor by remember(settings) {
@@ -823,11 +818,7 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
     val settings by viewModel.settings.collectAsState()
 
     var barTextColor by remember(settings) {
-        if (settings.barColor == 0xFF111111L || settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
-            mutableStateOf(Color.White)
-        } else {
-            mutableStateOf(Color.Black)
-        }
+        mutableStateOf(Color(settings.barTextColor))
     }
 
     var mainTextColor by remember(settings) {
@@ -1183,11 +1174,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
     val settings by viewModel.settings.collectAsState()
 
     var barTextColor by remember(settings) {
-        if (settings.barColor == 0xFF111111L || settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
-            mutableStateOf(Color.White)
-        } else {
-            mutableStateOf(Color.Black)
-        }
+        mutableStateOf(Color(settings.barTextColor))
     }
 
     var mainTextColor by remember(settings) {
@@ -1218,8 +1205,8 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         mutableStateOf(false)
     }
 
-    var listText by remember(content) {
-        mutableStateOf(TextFieldValue(text = content, selection = TextRange(2)))
+    var listText by remember {
+        mutableStateOf(TextFieldValue(text = ""))
     }
 
     var bulletList by remember {
@@ -1250,11 +1237,15 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         mutableStateListOf<HomeViewModel.TransformationRanges>()
     }
 
-    LaunchedEffect(ranges) {
+    LaunchedEffect(content, ranges) {
+        // Only overwrite the text field if it's currently empty (e.g., initial cold launch)
+        if (listText.text.isEmpty() && content.isNotEmpty()) {
+            listText = TextFieldValue(text = content, selection = TextRange(content.length))
+        }
+
+        // Sync down your formatting style rules cleanly
         if (localRanges.isEmpty() && ranges.isNotEmpty()) {
             localRanges.addAll(ranges)
-            // force recomposition of the text field with the loaded ranges
-            listText = TextFieldValue(text = content, selection = TextRange(content.length))
         }
     }
 
@@ -1639,7 +1630,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 }
 
 @Composable
-fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, application: Application) {
+fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
     val settings by viewModel.settings.collectAsState()
     val groceryListObj = viewModel.lists.collectAsState().value.find { it.id == settings.widgetDisplayListId }
     val listIds by viewModel.listIds.collectAsStateWithLifecycle()
@@ -1657,12 +1648,13 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, appli
         "Royal Purple" to 0xFF7851A9L
     )
 
+    val textColorDict = mapOf(
+        "Black" to 0xFF000000L,
+        "White" to 0xFFFFFFFFL
+    )
+
     var barTextColor by remember(settings) {
-        if (settings.barColor == 0xFF111111L || settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor ==  0xFF7851A9L ) {
-            mutableStateOf(Color.White)
-        } else {
-            mutableStateOf(Color.Black)
-        }
+        mutableStateOf(Color(settings.barTextColor))
     }
 
     var mainTextColor by remember(settings) {
@@ -1689,6 +1681,10 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, appli
         mutableLongStateOf(settings.barColor)
     }
 
+    var barTextColorChoice by remember(settings) {
+        mutableLongStateOf(settings.barTextColor)
+    }
+
     var chosenWidgetListId by remember(settings) {
         mutableIntStateOf(settings.widgetDisplayListId)
     }
@@ -1701,11 +1697,19 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, appli
         mutableStateOf(colorDict.entries.find { pair -> pair.value == settings.barColor }?.key?: "Yellow")
     }
 
+    var barTextColorChoiceString by remember(settings) {
+        mutableStateOf(textColorDict.entries.find { pair -> pair.value == settings.barTextColor }?.key?: "Black")
+    }
+
     var isChoosingBarColor by remember {
         mutableStateOf(false)
     }
 
     var isChoosingWidgetList by remember {
+        mutableStateOf(false)
+    }
+
+    var isChoosingBarTextColor by remember {
         mutableStateOf(false)
     }
 
@@ -1738,7 +1742,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, appli
                 Button(
                     onClick = {
                         navController.navigate("home")
-                        viewModel.updateSetting(darkMode = darkModeSwitch, barColor = barColorChoice, widgetDisplayListId = chosenWidgetListId)
+                        viewModel.updateSetting(darkMode = darkModeSwitch, barColor = barColorChoice, widgetDisplayListId = chosenWidgetListId, barTextColor = barTextColorChoice)
                     },
                     colors = ButtonColors(
                         containerColor = Color(settings.barColor),
@@ -1828,6 +1832,49 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, appli
 
             HorizontalDivider(thickness = 2.dp, color = mainTextColor)
 
+            // bar text color
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color(backgroundColor)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Bar Text Color", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = mainTextColor)
+                Card(
+                    border = BorderStroke(2.dp, color = Color.Gray),
+                    modifier = Modifier
+                        .size(120.dp, 60.dp)
+                        .padding(10.dp)
+                        .clickable(
+                            onClick = {
+                                isChoosingBarTextColor = true
+                            }
+                        )
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text(text = barTextColorChoiceString)
+                    }
+                    DropdownMenu(
+                        expanded = isChoosingBarTextColor,
+                        onDismissRequest = { isChoosingBarTextColor = false }
+                    ) {
+                        for (color in textColorDict.keys) {
+                            DropdownMenuItem(
+                                text = { Text(text = color) },
+                                onClick = {
+                                    barTextColorChoice = textColorDict[color]?:0xFF000000L
+                                    barTextColorChoiceString = color
+                                    isChoosingBarTextColor = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
+
+            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
+
             // choose list to display on widget
             Row(
                 modifier = Modifier
@@ -1868,6 +1915,8 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, appli
                     }
                 }
             }
+
+            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
         }
     }
 }

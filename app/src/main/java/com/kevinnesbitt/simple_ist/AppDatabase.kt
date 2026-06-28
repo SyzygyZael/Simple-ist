@@ -39,7 +39,8 @@ data class SettingsEntity(
     @PrimaryKey val settingId: Int = 1,
     val darkMode: Boolean = false,
     val barColor: Long = 0xFFFFFF00L,
-    val widgetDisplayListId: Int = 0
+    val widgetDisplayListId: Int = 0,
+    val barTextColor: Long = 0xFF000000L
 )
 
 @Dao
@@ -89,8 +90,8 @@ interface GroceryDao {
     @Query("UPDATE grocery_items SET strike = :strike WHERE id = :itemId")
     suspend fun updateItemStrike(itemId: Int, strike: Boolean)
 
-    @Query("UPDATE settings SET darkMode = :switch, barColor = :color, widgetDisplayListId = :widgetDisplayListId WHERE settingId = 1")
-    suspend fun updateSetting(switch: Boolean, color: Long, widgetDisplayListId: Int)
+    @Query("UPDATE settings SET darkMode = :switch, barColor = :color, widgetDisplayListId = :widgetDisplayListId, barTextColor = :barTextColor WHERE settingId = 1")
+    suspend fun updateSetting(switch: Boolean, color: Long, widgetDisplayListId: Int, barTextColor: Long)
 
     @Query("UPDATE transformation_ranges SET start = :start, endIndex = :end WHERE id = :id")
     suspend fun updateRange(id: Int, start: Int, end: Int)
@@ -108,7 +109,7 @@ interface GroceryDao {
     fun getListIds(): Flow<List<Int>>
 }
 
-@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class, TransformationRangesEntity::class], version = 16)
+@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class, TransformationRangesEntity::class], version = 17)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun groceryDao(): GroceryDao
 

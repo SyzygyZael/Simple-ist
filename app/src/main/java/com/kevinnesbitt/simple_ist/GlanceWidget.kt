@@ -14,9 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.glance.GlanceId
@@ -38,8 +36,8 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
-import androidx.glance.appwidget.action.actionStartActivity
-import androidx.glance.text.FontStyle
+import androidx.glance.layout.Box
+import androidx.glance.text.TextAlign
 import kotlin.collections.sortedBy
 
 class GlanceWidget : GlanceAppWidget() {
@@ -181,7 +179,7 @@ fun WidgetContent(viewModel: HomeViewModel) {
                     }
                 }
             }
-        } else {
+        } else if (content.isNotEmpty() && groceryListObj?.type == "generic"){
             // GlanceRichText(
             //     rawText = content,
             //     ranges = localRanges,
@@ -197,6 +195,23 @@ fun WidgetContent(viewModel: HomeViewModel) {
                         )
                     )
                 }
+            }
+        } else {
+            Column(
+                modifier = GlanceModifier
+                    .background(color = Color(backgroundColor))
+                    .fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Text(
+                    text = "Add a list in the app settings to display a list here!",
+                    style = TextStyle(
+                        fontSize = 13.sp,
+                        color = ColorProvider(day = Color.Gray, night = Color.Gray),
+                        textAlign = TextAlign.Center
+                    )
+                )
             }
         }
     }
