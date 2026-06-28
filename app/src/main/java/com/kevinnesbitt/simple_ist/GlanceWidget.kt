@@ -36,7 +36,6 @@ import androidx.glance.color.ColorProvider
 import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
-import androidx.glance.layout.Box
 import androidx.glance.text.TextAlign
 import kotlin.collections.sortedBy
 
