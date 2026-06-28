@@ -1,14 +1,12 @@
 package com.kevinnesbitt.simple_ist
 
 import android.app.Application
+import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import androidx.room.BuiltInTypeConverters
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.WhileSubscribed
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -56,6 +54,12 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
 
+    val listNames: StateFlow<List<String>> = dao.getListNames()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    val listIds: StateFlow<List<Int>> = dao.getListIds()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
     val settings = dao.getSettings()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsEntity())
 
@@ -63,18 +67,21 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val newId = dao.insertList(GroceryListEntity(id = 0, name = name, listType = type))
             onComplete(newId.toInt())
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
     fun addItem(listId: Int, itemName: String) {
         viewModelScope.launch {
             dao.insertItem(GroceryItemEntity(id = 0, listId = listId, itemName = itemName, strike = false))
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
     fun updateContent(listId: Int, newContent: String) {
         viewModelScope.launch {
             dao.upsertContent(GenericContentEntity(listId = listId, content = newContent))
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
@@ -82,24 +89,28 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val newId = dao.insertTransformationRange(TransformationRangesEntity(type = type, listId = listId, start = start, endIndex = end))
             onComplete(newId.toInt())
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
     fun deleteTransformationRange(id: Int) {
         viewModelScope.launch {
             dao.deleteTransformationRange(id)
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
     fun updateRange(id: Int, start: Int, end: Int) {
         viewModelScope.launch {
             dao.updateRange(id =  id, start = start, end = end)
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
     fun updateListName(listId: Int, newName: String) {
         viewModelScope.launch {
             dao.updateListName(listId, newName)
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
@@ -107,12 +118,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             dao.deleteItemsByListId(listId)
             dao.deleteList(listId)
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
     fun deleteItem(listId: Int, itemId: Int) {
         viewModelScope.launch {
             dao.deleteItem(itemId)
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
@@ -123,12 +136,14 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 ?.items?.find { it.id == itemId }
                 ?.strike ?: false
             dao.updateItemStrike(itemId, !currentStrike)
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
-    fun updateSetting(darkMode: Boolean, barColor: Long) {
+    fun updateSetting(darkMode: Boolean, barColor: Long, widgetDisplayListId: Int) {
         viewModelScope.launch {
-            dao.updateSetting(switch = darkMode, color = barColor)
+            dao.updateSetting(switch = darkMode, color = barColor, widgetDisplayListId = widgetDisplayListId)
+            GlanceWidget().updateAll(getApplication())
         }
     }
 

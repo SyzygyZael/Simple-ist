@@ -38,7 +38,8 @@ data class TransformationRangesEntity(
 data class SettingsEntity(
     @PrimaryKey val settingId: Int = 1,
     val darkMode: Boolean = false,
-    val barColor: Long = 0xFFFFFF00L
+    val barColor: Long = 0xFFFFFF00L,
+    val widgetDisplayListId: Int = 0
 )
 
 @Dao
@@ -88,8 +89,8 @@ interface GroceryDao {
     @Query("UPDATE grocery_items SET strike = :strike WHERE id = :itemId")
     suspend fun updateItemStrike(itemId: Int, strike: Boolean)
 
-    @Query("UPDATE settings SET darkMode = :switch, barColor = :color WHERE settingId = 1")
-    suspend fun updateSetting(switch: Boolean, color: Long)
+    @Query("UPDATE settings SET darkMode = :switch, barColor = :color, widgetDisplayListId = :widgetDisplayListId WHERE settingId = 1")
+    suspend fun updateSetting(switch: Boolean, color: Long, widgetDisplayListId: Int)
 
     @Query("UPDATE transformation_ranges SET start = :start, endIndex = :end WHERE id = :id")
     suspend fun updateRange(id: Int, start: Int, end: Int)
@@ -99,9 +100,15 @@ interface GroceryDao {
 
     @Query("SELECT * FROM settings WHERE settingId = 1")
     suspend fun getSettingsOnce(): SettingsEntity?
+
+    @Query("SELECT name FROM grocery_lists")
+    fun getListNames(): Flow<List<String>>
+
+    @Query("SELECT id FROM grocery_lists")
+    fun getListIds(): Flow<List<Int>>
 }
 
-@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class, TransformationRangesEntity::class], version = 14)
+@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class, TransformationRangesEntity::class], version = 16)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun groceryDao(): GroceryDao
 
