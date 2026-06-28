@@ -53,7 +53,7 @@ interface GroceryDao {
     suspend fun upsertContent(content: GenericContentEntity)
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertTransformationRange(transformationRange: TransformationRangesEntity)
+    suspend fun insertTransformationRange(transformationRange: TransformationRangesEntity): Long
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSettings(settings: SettingsEntity)
@@ -101,7 +101,7 @@ interface GroceryDao {
     suspend fun getSettingsOnce(): SettingsEntity?
 }
 
-@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class, TransformationRangesEntity::class], version = 11)
+@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class, TransformationRangesEntity::class], version = 14)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun groceryDao(): GroceryDao
 

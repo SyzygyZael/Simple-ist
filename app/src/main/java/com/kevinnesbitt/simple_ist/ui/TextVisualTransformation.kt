@@ -8,6 +8,7 @@ import androidx.compose.ui.text.input.OffsetMapping
 import androidx.compose.ui.text.input.TransformedText
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.sp
 import com.kevinnesbitt.simple_ist.HomeViewModel
 
 class TextVisualTransformation(private val transformationRanges: List<HomeViewModel.TransformationRanges>) : VisualTransformation {
@@ -15,12 +16,18 @@ class TextVisualTransformation(private val transformationRanges: List<HomeViewMo
         val builder = AnnotatedString.Builder(text.text)
 
         transformationRanges.forEach { range ->
-            if (range.start <= text.length && range.end <= text.length) {
+            // android.util.Log.d("Ranges", "id=${range.id} type=${range.type} start=${range.start} end=${range.end} textLength=${text.length}")
+            if (range.start < text.length && range.end <= text.length && range.start < range.end) {
                 builder.addStyle(
                     style =  SpanStyle(
-                        fontWeight = if (range.type == "bold") FontWeight.Bold else null,
-                        fontStyle = if (range.type == "italic") FontStyle.Italic else null,
-                        textDecoration = if (range.type == "underline") TextDecoration.Underline else null
+                        fontWeight = if (range.type.contains("bold")) FontWeight.Bold else null,
+                        fontStyle = if (range.type.contains("italic")) FontStyle.Italic else null,
+                        textDecoration = if (range.type.contains("underline")) TextDecoration.Underline else null,
+                        fontSize = when {
+                            range.type.contains("bigHeader") -> { 25.sp }
+                            range.type.contains("biggerHeader") -> { 32.sp }
+                            else -> { 20.sp }
+                        }
                         ),
                     start = range.start,
                     end = range.end

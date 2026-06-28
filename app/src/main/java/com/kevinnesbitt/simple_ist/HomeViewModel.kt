@@ -78,9 +78,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addTransformationRange(listId: Int, type: String, start: Int, end: Int) {
+    fun addTransformationRange(listId: Int, type: String, start: Int, end: Int, onComplete: (Int) -> Unit = {}) {
         viewModelScope.launch {
-            dao.insertTransformationRange(TransformationRangesEntity(type = type, listId = listId, start = start, endIndex = end))
+            val newId = dao.insertTransformationRange(TransformationRangesEntity(type = type, listId = listId, start = start, endIndex = end))
+            onComplete(newId.toInt())
         }
     }
 

@@ -1,16 +1,11 @@
 package com.kevinnesbitt.simple_ist
 
-import android.R
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.EnterTransition
-import androidx.compose.animation.core.tween
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.slideIn
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
@@ -23,10 +18,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -41,7 +34,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardElevation
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -64,12 +56,10 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.TextRange
@@ -81,13 +71,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavType
@@ -98,7 +86,6 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.kevinnesbitt.simple_ist.ui.TextVisualTransformation
 import kotlin.collections.emptyList
-import kotlin.math.sin
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -520,9 +507,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                         shape = RoundedCornerShape(25.dp),
                         border = BorderStroke(2.dp, Color.Gray)
                     ) {
-                        Column(
-
-                        ) {
+                        Column {
                             Row(
                                 horizontalArrangement = Arrangement.Center,
                                 modifier = Modifier
@@ -1186,7 +1171,6 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
 @Composable
 fun GenericListScreen(listId: Int, navController: NavController, viewModel: HomeViewModel) {
     val groceryListObj = viewModel.lists.collectAsState().value.find { it.id == listId }
-    val itemLst = groceryListObj?.items?: emptyList()
     val listName = groceryListObj?.name?: ""
 
     val contentListObj = viewModel.contentList.collectAsState().value.find { it.listId == listId }
@@ -1251,6 +1235,14 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         mutableStateOf(false)
     }
 
+    var bigHeader by remember {
+        mutableStateOf(false)
+    }
+
+    var biggerHeader by remember {
+        mutableStateOf(false)
+    }
+
     val localRanges = remember {
         mutableStateListOf<HomeViewModel.TransformationRanges>()
     }
@@ -1258,6 +1250,8 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
     LaunchedEffect(ranges) {
         if (localRanges.isEmpty() && ranges.isNotEmpty()) {
             localRanges.addAll(ranges)
+            // force recomposition of the text field with the loaded ranges
+            listText = TextFieldValue(text = content, selection = TextRange(content.length))
         }
     }
 
@@ -1385,28 +1379,34 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 val oldText = listText.text
                                 val cursorPos = newText.selection.start
 
-                                if (currentText.length > oldText.length && (boldLetters || italicLetters || underlineLetters)) {
+                                var decorType = ""
+                                if (boldLetters) decorType += "bold"
+                                if (italicLetters) decorType += "italic"
+                                if (underlineLetters) decorType += "underline"
+                                if (bigHeader) decorType += "bigHeader"
+                                if (biggerHeader) decorType += "biggerHeader"
+                                if (currentText.length > oldText.length && (boldLetters || italicLetters || underlineLetters || bigHeader || biggerHeader)) {
                                     val typedIndex = cursorPos - 1
-                                    val lastRange = ranges.lastOrNull()
+                                    val lastRange = localRanges.lastOrNull()
 
-                                    if (lastRange != null && lastRange.end == typedIndex) {
-                                        val index = ranges.lastIndex
+                                    if (lastRange != null && lastRange.end == typedIndex && lastRange.type == decorType) {
+                                        // extend existing range
                                         val updatedRange = lastRange.copy(end = cursorPos)
-
-                                        localRanges[index] = updatedRange
-
-                                        viewModel.updateRange(index, lastRange.start, cursorPos)
+                                        localRanges[localRanges.lastIndex] = updatedRange
+                                        viewModel.updateRange(lastRange.id, lastRange.start, cursorPos)
                                     } else {
-                                        val decorType = when {
-                                            boldLetters -> { "bold" }
-                                            italicLetters -> { "italic" }
-                                            else -> { "underline" }
-                                        }
-
+                                        // create new range
+                                        android.util.Log.d("Decor Type", "type = $decorType")
                                         val newRange = HomeViewModel.TransformationRanges(id = 0, listId, decorType, typedIndex, cursorPos)
                                         localRanges.add(newRange)
 
-                                        viewModel.addTransformationRange(listId, decorType, typedIndex, cursorPos)
+                                        viewModel.addTransformationRange(listId, decorType, typedIndex, cursorPos) { realId ->
+                                            // update the localRange with the real database id
+                                            val index = localRanges.indexOfFirst { it.id == 0 && it.start == typedIndex }
+                                            if (index != -1) {
+                                                localRanges[index] = localRanges[index].copy(id = realId)
+                                            }
+                                        }
                                     }
                                 } else if (currentText.length < oldText.length) {
                                     val deletedIndex = cursorPos
@@ -1427,7 +1427,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                             // Shrink the affected range by 1
                                             val updatedRange = affectedRange.copy(end = affectedRange.end - 1)
                                             localRanges[targetRangeIndex] = updatedRange
-                                            viewModel.updateRange(targetRangeIndex, updatedRange.start, updatedRange.end)
+                                            viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
                                         }
                                     }
 
@@ -1438,7 +1438,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                             val shiftedRange = range.copy(start = range.start - 1, end = range.end - 1)
                                             localRanges[i] = shiftedRange
                                             // Update the database to reflect the shifted positions
-                                            viewModel.updateRange(i, shiftedRange.start, shiftedRange.end)
+                                            viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
                                         }
                                     }
                                 }
@@ -1493,7 +1493,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                     Column(
                         modifier = Modifier
                             .size(60.dp, screenHeight)
-                            .background(color = Color(settings.barColor)),
+                            .background(color = Color(backgroundColor)),
                         horizontalAlignment = Alignment.CenterHorizontally
                     ) {
                         Button(
@@ -1513,10 +1513,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 }
                             },
                             colors = ButtonColors(
-                                containerColor = if (!bulletList) Color(settings.barColor) else Color.LightGray.copy(0.5f),
-                                contentColor = barTextColor,
-                                disabledContentColor = barTextColor,
-                                disabledContainerColor = if (!bulletList) Color(settings.barColor) else Color.LightGray.copy(0.5f)
+                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                contentColor = mainTextColor,
+                                disabledContentColor = mainTextColor,
+                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
                             ),
                             shape = CircleShape
                         ) {
@@ -1531,14 +1531,12 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 .size(55.dp, 55.dp),
                             onClick = {
                                 boldLetters = !boldLetters
-                                italicLetters = false
-                                underlineLetters = false
                             },
                             colors = ButtonColors(
-                                containerColor = if (!boldLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f),
-                                contentColor = barTextColor,
-                                disabledContentColor = barTextColor,
-                                disabledContainerColor = if (!boldLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f)
+                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                contentColor = mainTextColor,
+                                disabledContentColor = mainTextColor,
+                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
                             ),
                             shape = CircleShape
                         ) {
@@ -1553,14 +1551,12 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             modifier = Modifier.size(55.dp, 55.dp),
                             onClick = {
                                 italicLetters = !italicLetters
-                                boldLetters = false
-                                underlineLetters = false
                             },
                             colors = ButtonColors(
-                                containerColor = if (!italicLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f),
-                                contentColor = barTextColor,
-                                disabledContentColor = barTextColor,
-                                disabledContainerColor = if (!italicLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f)
+                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                contentColor = mainTextColor,
+                                disabledContentColor = mainTextColor,
+                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
                             ),
                             shape = CircleShape
                         ) {
@@ -1575,19 +1571,59 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             modifier = Modifier.size(55.dp, 55.dp),
                             onClick = {
                                 underlineLetters = !underlineLetters
-                                italicLetters = false
-                                boldLetters = false
                             },
                             colors = ButtonColors(
-                                containerColor = if (!underlineLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f),
-                                contentColor = barTextColor,
-                                disabledContentColor = barTextColor,
-                                disabledContainerColor = if (!underlineLetters) Color(settings.barColor) else Color.LightGray.copy(0.5f)
+                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                contentColor = mainTextColor,
+                                disabledContentColor = mainTextColor,
+                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
                             ),
                             shape = CircleShape
                         ) {
                             Text(
                                 text = "U̲",
+                                fontSize = 23.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        Button(
+                            modifier = Modifier.size(55.dp, 55.dp),
+                            onClick = {
+                                bigHeader = !bigHeader
+                                biggerHeader = false
+                            },
+                            colors = ButtonColors(
+                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                contentColor = mainTextColor,
+                                disabledContentColor = mainTextColor,
+                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                            ),
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = "H̲",
+                                fontSize = 23.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+
+                        Button(
+                            modifier = Modifier.size(55.dp, 55.dp),
+                            onClick = {
+                                biggerHeader = !biggerHeader
+                                bigHeader = false
+                            },
+                            colors = ButtonColors(
+                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                contentColor = mainTextColor,
+                                disabledContentColor = mainTextColor,
+                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                            ),
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = "H̳",
                                 fontSize = 23.sp,
                                 textAlign = TextAlign.Center
                             )
@@ -1694,7 +1730,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                         disabledContainerColor = Color(settings.barColor)
                     )
                 ) {
-                    Text(text = "Save", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text(text = "Apply", fontSize = 17.sp, fontWeight = FontWeight.Bold)
                 }
 
                 Text(text = "Settings",
