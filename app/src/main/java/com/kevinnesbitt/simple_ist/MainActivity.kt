@@ -1533,10 +1533,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 boldLetters = !boldLetters
                             },
                             colors = ButtonColors(
-                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                containerColor = if (!boldLetters) Color(backgroundColor) else Color.LightGray.copy(0.5f),
                                 contentColor = mainTextColor,
                                 disabledContentColor = mainTextColor,
-                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                                disabledContainerColor = if (!boldLetters) Color(backgroundColor) else Color.LightGray.copy(0.5f)
                             ),
                             shape = CircleShape
                         ) {
@@ -1553,10 +1553,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 italicLetters = !italicLetters
                             },
                             colors = ButtonColors(
-                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                containerColor = if (!italicLetters) Color(backgroundColor) else Color.LightGray.copy(0.5f),
                                 contentColor = mainTextColor,
                                 disabledContentColor = mainTextColor,
-                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                                disabledContainerColor = if (!italicLetters) Color(backgroundColor) else Color.LightGray.copy(0.5f)
                             ),
                             shape = CircleShape
                         ) {
@@ -1573,10 +1573,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 underlineLetters = !underlineLetters
                             },
                             colors = ButtonColors(
-                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                containerColor = if (!underlineLetters) Color(backgroundColor) else Color.LightGray.copy(0.5f),
                                 contentColor = mainTextColor,
                                 disabledContentColor = mainTextColor,
-                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                                disabledContainerColor = if (!underlineLetters) Color(backgroundColor) else Color.LightGray.copy(0.5f)
                             ),
                             shape = CircleShape
                         ) {
@@ -1594,10 +1594,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 biggerHeader = false
                             },
                             colors = ButtonColors(
-                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                containerColor = if (!bigHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f),
                                 contentColor = mainTextColor,
                                 disabledContentColor = mainTextColor,
-                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                                disabledContainerColor = if (!bigHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f)
                             ),
                             shape = CircleShape
                         ) {
@@ -1615,10 +1615,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 bigHeader = false
                             },
                             colors = ButtonColors(
-                                containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                containerColor = if (!biggerHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f),
                                 contentColor = mainTextColor,
                                 disabledContentColor = mainTextColor,
-                                disabledContainerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                                disabledContainerColor = if (!biggerHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f)
                             ),
                             shape = CircleShape
                         ) {
