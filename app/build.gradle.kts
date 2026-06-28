@@ -14,7 +14,7 @@ android {
 
     defaultConfig {
         applicationId = "com.kevinnesbitt.simple_ist"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -53,6 +53,11 @@ dependencies {
     implementation("androidx.room:room-runtime:2.7.1")
     implementation("androidx.room:room-ktx:2.7.1")
     implementation("androidx.compose.material:material-icons-extended")
+    // Main Glance Widget support
+    implementation("androidx.glance:glance-appwidget:1.1.1")
+
+    // Optional: Material 3 styling support within Glance
+    implementation("androidx.glance:glance-material3:1.1.1")
     ksp("androidx.room:room-compiler:2.7.1")
     testImplementation(libs.junit)
     androidTestImplementation(platform(libs.androidx.compose.bom))

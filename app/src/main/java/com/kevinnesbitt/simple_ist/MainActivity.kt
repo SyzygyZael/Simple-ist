@@ -1,5 +1,6 @@
 package com.kevinnesbitt.simple_ist
 
+import android.app.Application
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
@@ -20,6 +21,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -76,6 +78,7 @@ import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavType
@@ -126,7 +129,7 @@ class MainActivity : ComponentActivity() {
                     }
 
                     composable("settings") {
-                        SettingsScreen(navController, viewModel)
+                        SettingsScreen(navController, viewModel, application)
                     }
 
                     composable(
@@ -278,7 +281,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
             .padding(innerPadding)
             .background(color = Color(backgroundColor))
         ) {
-            HorizontalDivider(thickness = 2.dp, color = Color.Gray)
+            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
 
             // add lists
             if (lsts.isNotEmpty()) {
@@ -286,7 +289,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                     items(lsts) { groceryList ->
                         Surface(
                             shape = RoundedCornerShape(15.dp),
-                            border = BorderStroke(2.dp, Color.Gray),
+                            border = BorderStroke(1.dp, Color.Gray),
                             tonalElevation = 3.dp,
                             modifier = Modifier
                                 .padding(3.dp)
@@ -1215,7 +1218,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         mutableStateOf(false)
     }
 
-    var listText by remember {
+    var listText by remember(content) {
         mutableStateOf(TextFieldValue(text = content, selection = TextRange(2)))
     }
 
@@ -1636,8 +1639,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 }
 
 @Composable
-fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
+fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, application: Application) {
     val settings by viewModel.settings.collectAsState()
+    val groceryListObj = viewModel.lists.collectAsState().value.find { it.id == settings.widgetDisplayListId }
+    val listIds by viewModel.listIds.collectAsStateWithLifecycle()
 
     val colorDict = mapOf(
         "Black" to 0xFF000000L,
@@ -1684,11 +1689,23 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
         mutableLongStateOf(settings.barColor)
     }
 
+    var chosenWidgetListId by remember(settings) {
+        mutableIntStateOf(settings.widgetDisplayListId)
+    }
+
+    var chosenWidgetListName by remember(settings) {
+        mutableStateOf(groceryListObj?.name?: "None")
+    }
+
     var barColorChoiceString by remember(settings) {
         mutableStateOf(colorDict.entries.find { pair -> pair.value == settings.barColor }?.key?: "Yellow")
     }
 
     var isChoosingBarColor by remember {
+        mutableStateOf(false)
+    }
+
+    var isChoosingWidgetList by remember {
         mutableStateOf(false)
     }
 
@@ -1721,7 +1738,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 Button(
                     onClick = {
                         navController.navigate("home")
-                        viewModel.updateSetting(darkMode = darkModeSwitch, barColor = barColorChoice)
+                        viewModel.updateSetting(darkMode = darkModeSwitch, barColor = barColorChoice, widgetDisplayListId = chosenWidgetListId)
                     },
                     colors = ButtonColors(
                         containerColor = Color(settings.barColor),
@@ -1792,7 +1809,8 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                     }
                     DropdownMenu(
                         expanded = isChoosingBarColor,
-                        onDismissRequest = { isChoosingBarColor = false }
+                        onDismissRequest = { isChoosingBarColor = false },
+                        modifier = Modifier.heightIn(max = 180.dp)
                     ) {
                         for (color in colorDict.keys) {
                             DropdownMenuItem(
@@ -1809,6 +1827,47 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
             }
 
             HorizontalDivider(thickness = 2.dp, color = mainTextColor)
+
+            // choose list to display on widget
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color(backgroundColor)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Widget Display List", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = mainTextColor)
+                Card(
+                    border = BorderStroke(2.dp, color = Color.Gray),
+                    modifier = Modifier
+                        .size(120.dp, 60.dp)
+                        .padding(10.dp)
+                        .clickable(
+                            onClick = {
+                                isChoosingWidgetList = true
+                            }
+                        )
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text(text = chosenWidgetListName)
+                    }
+                    DropdownMenu(
+                        expanded = isChoosingWidgetList,
+                        onDismissRequest = { isChoosingWidgetList = false }
+                    ) {
+                        for (listId in listIds) {
+                            DropdownMenuItem(
+                                text = { Text(text = viewModel.lists.collectAsState().value.find { it.id == listId }?.name?: "") },
+                                onClick = {
+                                    chosenWidgetListId = listId
+                                    chosenWidgetListName = viewModel.lists.value.find { it.id == listId }?.name?: ""
+                                    isChoosingWidgetList = false
+                                }
+                            )
+                        }
+                    }
+                }
+            }
         }
     }
 }
