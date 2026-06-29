@@ -39,6 +39,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CardElevation
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -856,7 +857,7 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
             add(to.index, removeAt(from.index))
         }
         // Tell the viewmodel to write this new arrangement to disk in the background
-        viewModel.updateItemOrder(localItems)
+        viewModel.updateItemOrder(localItems, listId)
     }
 
     val settings by viewModel.settings.collectAsState()
@@ -903,6 +904,10 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
 
     var randTextChooser by remember {
         mutableStateOf<Int?>((1..6).random())
+    }
+
+    var isReorderingItems by remember {
+        mutableStateOf(false)
     }
 
     Scaffold(
@@ -1000,21 +1005,7 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
                 }
 
                 // '+' and 'Done' buttons
-                if (!isAddingItem) {
-                    Button(
-                        onClick = {
-                            isAddingItem = true },
-                        modifier = Modifier.align(Alignment.CenterVertically),
-                        colors = ButtonColors(
-                            containerColor = Color(settings.barColor),
-                            contentColor = barTextColor,
-                            disabledContentColor = barTextColor,
-                            disabledContainerColor = Color(settings.barColor)
-                        )
-                    ) {
-                        Text(text = "+", fontSize = 28.sp)
-                    }
-                } else {
+                if (isAddingItem) {
                     Button(
                         onClick = {
                             if (itemName != "") {
@@ -1033,63 +1024,149 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
                     ) {
                         Text(text = "Done", fontSize = 18.sp, fontWeight = FontWeight.Bold)
                     }
+                } else if (isReorderingItems) {
+                    Button(
+                        onClick = {
+                            isReorderingItems = false
+                        },
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                        colors = ButtonColors(
+                            containerColor = Color(settings.barColor),
+                            contentColor = barTextColor,
+                            disabledContentColor = barTextColor,
+                            disabledContainerColor = Color(settings.barColor)
+                        )
+                    ) {
+                        Text(text = "Done", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                    }
+                } else {
+                    Button(
+                        onClick = {
+                            isAddingItem = true },
+                        modifier = Modifier.align(Alignment.CenterVertically),
+                        colors = ButtonColors(
+                            containerColor = Color(settings.barColor),
+                            contentColor = barTextColor,
+                            disabledContentColor = barTextColor,
+                            disabledContainerColor = Color(settings.barColor)
+                        )
+                    ) {
+                        Text(text = "+", fontSize = 28.sp)
+                    }
                 }
             }
 
             // display list items
-            if (itemLst.isNotEmpty()) {
-                LazyColumn(modifier = Modifier.imePadding()) {
-                    items(itemLst) { groceryItem ->
-                        if (groceryItem.strike) {
-                            Text(
-                                text = "• " + groceryItem.itemName,
-                                fontSize = 19.sp,
+            if (localItems.isNotEmpty()) {
+                LazyColumn(
+                    modifier = Modifier.imePadding(),
+                    state = lazyListState,
+                ) {
+                    items(localItems, key = { groceryItem -> groceryItem.id }) { groceryItem ->
+                        ReorderableItem(reorderableState, key = groceryItem.id) { isDragging ->
+                            Card(
                                 modifier = Modifier
+                                    .animateItem()
                                     .fillMaxWidth()
-                                    .padding(10.dp)
-                                    .combinedClickable(
-                                        onClick = {
-                                            viewModel.strikeItem(
-                                                listId = listId,
-                                                itemId = groceryItem.id
-                                            )
-                                        },
-                                        onLongClick = { expandableListId = groceryItem.id }
-                                    ),
-                                textDecoration = TextDecoration.LineThrough,
-                                color = Color.LightGray
-                            )
-                        } else {
-                            Text(
-                                text = "• " + groceryItem.itemName,
-                                fontSize = 19.sp,
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(10.dp)
-                                    .combinedClickable(
-                                        onClick = {
-                                            viewModel.strikeItem(
-                                                listId = listId,
-                                                itemId = groceryItem.id
-                                            )
-                                        },
-                                        onLongClick = { expandableListId = groceryItem.id }
-                                    ),
-                                color = mainTextColor
-                            )
-                        }
+                                    .background(color = Color(backgroundColor)),
+                                shape = RoundedCornerShape(7.dp)
+                            ) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(color = Color(backgroundColor))
+                                ) {
+                                    if (isReorderingItems) {
+                                        Text(
+                                            text = "⋮⋮",
+                                            fontSize = 19.sp,
+                                            color = mainTextColor,
+                                            modifier = Modifier
+                                                .padding(10.dp)
+                                                .draggableHandle()
+                                        )
+                                    }
 
-                        // dropdown menu setup
-                        DropdownMenu(
-                            expanded = expandableListId == groceryItem.id,
-                            onDismissRequest = { expandableListId = null }
-                        ) {
-                            DropdownMenuItem(
-                                text = { Text(text = "Delete", fontSize = 18.sp, fontWeight = FontWeight.Bold) },
-                                onClick = {
-                                    viewModel.deleteItem(itemId = groceryItem.id, listId = listId)
+                                    if (groceryItem.strike) {
+                                        Text(
+                                            text = "• " + groceryItem.itemName,
+                                            fontSize = 19.sp,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(10.dp)
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        viewModel.strikeItem(
+                                                            listId = listId,
+                                                            itemId = groceryItem.id
+                                                        )
+                                                    },
+                                                    onLongClick = {
+                                                        expandableListId = groceryItem.id
+                                                    }
+                                                ),
+                                            textDecoration = TextDecoration.LineThrough,
+                                            color = Color.LightGray
+                                        )
+                                    } else {
+                                        Text(
+                                            text = "• " + groceryItem.itemName,
+                                            fontSize = 19.sp,
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .padding(10.dp)
+                                                .combinedClickable(
+                                                    onClick = {
+                                                        viewModel.strikeItem(
+                                                            listId = listId,
+                                                            itemId = groceryItem.id
+                                                        )
+                                                    },
+                                                    onLongClick = {
+                                                        expandableListId = groceryItem.id
+                                                    }
+                                                ),
+                                            color = mainTextColor
+                                        )
+                                    }
+
+                                    // dropdown menu setup
+                                    DropdownMenu(
+                                        expanded = expandableListId == groceryItem.id,
+                                        onDismissRequest = { expandableListId = null }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "Delete",
+                                                    fontSize = 18.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            },
+                                            onClick = {
+                                                viewModel.deleteItem(
+                                                    itemId = groceryItem.id,
+                                                    listId = listId
+                                                )
+                                            }
+                                        )
+
+                                        DropdownMenuItem(
+                                            text = {
+                                                Text(
+                                                    text = "Move",
+                                                    fontSize = 18.sp,
+                                                    fontWeight = FontWeight.Bold
+                                                )
+                                            },
+                                            onClick = {
+                                                isReorderingItems = true
+                                                expandableListId = null
+                                            }
+                                        )
+                                    }
                                 }
-                            )
+                            }
                         }
                     }
 
@@ -1917,7 +1994,8 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                     }
                     DropdownMenu(
                         expanded = isChoosingBarTextColor,
-                        onDismissRequest = { isChoosingBarTextColor = false }
+                        onDismissRequest = { isChoosingBarTextColor = false },
+                        modifier = Modifier.heightIn(max = 180.dp)
                     ) {
                         for (color in textColorDict.keys) {
                             DropdownMenuItem(
@@ -1960,7 +2038,8 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                     }
                     DropdownMenu(
                         expanded = isChoosingWidgetList,
-                        onDismissRequest = { isChoosingWidgetList = false }
+                        onDismissRequest = { isChoosingWidgetList = false },
+                        modifier = Modifier.heightIn(max = 180.dp)
                     ) {
                         for (listId in listIds) {
                             DropdownMenuItem(

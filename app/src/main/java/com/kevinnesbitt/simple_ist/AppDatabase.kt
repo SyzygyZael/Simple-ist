@@ -17,7 +17,8 @@ data class GroceryItemEntity(
     @PrimaryKey(autoGenerate = true) val id: Int,
     val listId: Int,
     val itemName: String,
-    val strike: Boolean
+    val strike: Boolean,
+    val itemOrder: Int
 )
 
 @Entity(tableName = "generic_list_content")
@@ -61,7 +62,7 @@ interface GroceryDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertSettings(settings: SettingsEntity)
 
-    @Query("SELECT * FROM grocery_lists")
+    @Query("SELECT * FROM grocery_lists ORDER BY listOrder ASC")
     fun getAllLists(): Flow<List<GroceryListEntity>>
 
     @Query("SELECT * FROM transformation_ranges")
@@ -70,7 +71,7 @@ interface GroceryDao {
     @Query("SELECT * FROM generic_list_content")
     fun getAllContent(): Flow<List<GenericContentEntity>>
 
-    @Query("SELECT * FROM grocery_items")
+    @Query("SELECT * FROM grocery_items ORDER BY itemOrder ASC")
     fun getAllItems(): Flow<List<GroceryItemEntity>>
 
     @Query("DELETE FROM grocery_items WHERE id = :listId")
@@ -117,9 +118,12 @@ interface GroceryDao {
 
     @Query("SELECT COALESCE(MAX(listOrder), -1) FROM grocery_lists")
     suspend fun getMaxListOrder(): Int
+
+    @Query("SELECT COALESCE(MAX(itemOrder), -1) FROM grocery_items")
+    suspend fun getMaxItemOrder(): Int
 }
 
-@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class, TransformationRangesEntity::class], version = 19)
+@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class, TransformationRangesEntity::class], version = 21)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun groceryDao(): GroceryDao
 

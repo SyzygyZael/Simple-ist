@@ -36,7 +36,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     name = list.name,
                     items = items
                         .filter { it.listId == list.id }
-                        .map { ItemList(id = it.id, listId = it.listId, itemName = it.itemName, strike = it.strike) },
+                        .map { ItemList(id = it.id, listId = it.listId, itemName = it.itemName, strike = it.strike, order = it.itemOrder) },
                     type = list.listType,
                     order = list.listOrder
                 )
@@ -67,17 +67,39 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     val settings = dao.getSettings()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), SettingsEntity())
 
-    // fun addList(name: String, type: String, onComplete: (Int) -> Unit = {}) {
-    //     viewModelScope.launch {
-    //         val newId = dao.insertList(GroceryListEntity(id = 0, name = name, listType = type))
-    //         onComplete(newId.toInt())
-    //         GlanceWidget().updateAll(getApplication())
-    //     }
-    // }
+    fun addList(name: String, type: String, navController: NavController) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val maxOrder = dao.getMaxListOrder()
+            val newList = GroceryListEntity(
+                id = 0,
+                name = name,
+                listType = type,
+                listOrder = maxOrder + 1 // Starts at 0 if empty (-1 + 1)
+            )
+            val newId = dao.insertList(newList)
+
+            // onComplete(newId.toInt())
+            GlanceWidget().updateAll(getApplication())
+
+            withContext(Dispatchers.Main) {
+                navController.navigate("list/$newId/$type")
+            }
+        }
+    }
 
     fun addItem(listId: Int, itemName: String) {
-        viewModelScope.launch {
-            dao.insertItem(GroceryItemEntity(id = 0, listId = listId, itemName = itemName, strike = false))
+        viewModelScope.launch(Dispatchers.IO) {
+            val maxOrder = dao.getMaxItemOrder()
+            val newItem = GroceryItemEntity(
+                id = 0,
+                listId = listId,
+                itemName = itemName,
+                strike = false,
+                itemOrder = maxOrder + 1
+            )
+
+            dao.insertItem(newItem)
+
             GlanceWidget().updateAll(getApplication())
         }
     }
@@ -151,26 +173,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addList(name: String, type: String, navController: NavController) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val maxOrder = dao.getMaxListOrder()
-            val newList = GroceryListEntity(
-                id = 0,
-                name = name,
-                listType = type,
-                listOrder = maxOrder + 1 // Starts at 0 if empty (-1 + 1)
-            )
-            val newId = dao.insertList(newList)
-
-            // onComplete(newId.toInt())
-            GlanceWidget().updateAll(getApplication())
-
-            withContext(Dispatchers.Main) {
-                navController.navigate("list/$newId/$type")
-            }
-        }
-    }
-
     fun updateListOrder(reorderedList: List<GroceryList>) {
         viewModelScope.launch(Dispatchers.IO) {
             // Map the UI models back to Entities with their new index sequence
@@ -183,20 +185,23 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 )
             }
             dao.updateLists(updatedEntities)
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
-    fun updateItemOrder(reorderedItems: List<ItemList>) {
+    fun updateItemOrder(reorderedItems: List<ItemList>, listId: Int) {
         viewModelScope.launch(Dispatchers.IO) {
             val updatedEntities = reorderedItems.mapIndexed { index, item ->
                 GroceryItemEntity(
                     id = item.id,
                     itemName = item.itemName,
                     strike = item.strike,
-                    listId = item.listId
+                    listId = listId,
+                    itemOrder = index
                 )
             }
             dao.updateItems(updatedEntities)
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
@@ -212,7 +217,8 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val id: Int,
         val listId: Int,
         val itemName: String,
-        val strike: Boolean
+        val strike: Boolean,
+        val order: Int
     )
 
     data class TransformationRanges(
