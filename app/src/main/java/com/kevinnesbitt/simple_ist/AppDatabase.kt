@@ -8,7 +8,8 @@ import kotlinx.coroutines.flow.Flow
 data class GroceryListEntity(
     @PrimaryKey(autoGenerate = true) val id: Int,
     val name: String,
-    val listType: String
+    val listType: String,
+    val listOrder: Int
 )
 
 @Entity(tableName = "grocery_items")
@@ -96,6 +97,12 @@ interface GroceryDao {
     @Query("UPDATE transformation_ranges SET start = :start, endIndex = :end WHERE id = :id")
     suspend fun updateRange(id: Int, start: Int, end: Int)
 
+    @Update
+    suspend fun updateLists(lists: List<GroceryListEntity>)
+
+    @Update
+    suspend fun updateItems(items: List<GroceryItemEntity>)
+
     @Query("SELECT * FROM settings WHERE settingId = 1")
     fun getSettings(): Flow<SettingsEntity>
 
@@ -107,9 +114,12 @@ interface GroceryDao {
 
     @Query("SELECT id FROM grocery_lists")
     fun getListIds(): Flow<List<Int>>
+
+    @Query("SELECT COALESCE(MAX(listOrder), -1) FROM grocery_lists")
+    suspend fun getMaxListOrder(): Int
 }
 
-@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class, TransformationRangesEntity::class], version = 17)
+@Database(entities = [GroceryListEntity::class, GroceryItemEntity::class, GenericContentEntity::class, SettingsEntity::class, TransformationRangesEntity::class], version = 19)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun groceryDao(): GroceryDao
 

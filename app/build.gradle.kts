@@ -52,6 +52,7 @@ dependencies {
     implementation("androidx.core:core-splashscreen:1.0.1")
     implementation("androidx.room:room-runtime:2.7.1")
     implementation("androidx.room:room-ktx:2.7.1")
+    implementation("sh.calvin.reorderable:reorderable:2.4.3")
     implementation("androidx.compose.material:material-icons-extended")
     // Main Glance Widget support
     implementation("androidx.glance:glance-appwidget:1.1.1")

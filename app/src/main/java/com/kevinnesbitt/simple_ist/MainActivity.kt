@@ -1,11 +1,13 @@
 package com.kevinnesbitt.simple_ist
 
+import android.R
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
@@ -26,6 +28,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -35,6 +38,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -88,6 +92,8 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.kevinnesbitt.simple_ist.ui.TextVisualTransformation
 import kotlin.collections.emptyList
+import sh.calvin.reorderable.ReorderableItem
+import sh.calvin.reorderable.rememberReorderableLazyListState
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -155,8 +161,28 @@ class MainActivity : ComponentActivity() {
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
-    val lsts by viewModel.lists.collectAsState()
     val settings by viewModel.settings.collectAsState()
+    // 1. Get the source of truth stream from ViewModel
+    val databaseLists by viewModel.lists.collectAsState()
+
+    // 2. Create a local mutable state buffer initialized with the database state
+    var localLists by remember { mutableStateOf(emptyList<HomeViewModel.GroceryList>()) }
+
+    // 3. Keep local state synced whenever the database emits a fresh list from disk
+    LaunchedEffect(databaseLists) {
+        localLists = databaseLists
+    }
+
+    val lazyListState = rememberLazyListState()
+
+    // 4. Update local state immediately so it doesn't snap back, then tell VM
+    val reorderableState = rememberReorderableLazyListState(lazyListState = lazyListState) { from, to ->
+        localLists = localLists.toMutableList().apply {
+            add(to.index, removeAt(from.index))
+        }
+        // Tell the viewmodel to write this new arrangement to disk in the background
+        viewModel.updateListOrder(localLists)
+    }
 
     var barTextColor by remember(settings) {
         mutableStateOf(Color(settings.barTextColor))
@@ -279,83 +305,98 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
             HorizontalDivider(thickness = 2.dp, color = mainTextColor)
 
             // add lists
-            if (lsts.isNotEmpty()) {
-                LazyColumn(modifier = Modifier.imePadding()) {
-                    items(lsts) { groceryList ->
-                        Surface(
-                            shape = RoundedCornerShape(15.dp),
-                            border = BorderStroke(1.dp, Color.Gray),
-                            tonalElevation = 3.dp,
-                            modifier = Modifier
-                                .padding(3.dp)
-                        ) {
-                            Row(
+            if (localLists.isNotEmpty()) {
+                LazyColumn(
+                    state = lazyListState,
+                    modifier = Modifier.imePadding()
+                ) {
+                    items(localLists, key = { groceryList -> groceryList.id }) { groceryList ->
+                        ReorderableItem(reorderableState, key = groceryList.id) { isDragging ->
+                            val elevation = animateDpAsState(if (isDragging) 12.dp else 3.dp)
+
+                            Surface(
+                                shape = RoundedCornerShape(15.dp),
+                                border = BorderStroke(1.dp, Color.Gray),
+                                tonalElevation = elevation.value,
                                 modifier = Modifier
-                                    .fillMaxWidth()
-                                    .background(color = Color.White)
-                                    .combinedClickable(
-                                        onClick = { navController.navigate("list/${groceryList.id}/${groceryList.type}") },
-                                        onLongClick = { expandedListId = groceryList.id }
-                                    )
-                                    .background(color = Color(backgroundColor))
+                                    .padding(3.dp)
+                                    .animateItem()
                             ) {
                                 Row(
-                                    horizontalArrangement = Arrangement.SpaceBetween,
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    modifier = Modifier.fillMaxWidth()
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .background(color = Color(backgroundColor))
                                 ) {
                                     Text(
-                                        text = groceryList.name,
+                                        text = "⋮⋮",
                                         fontSize = 25.sp,
                                         color = mainTextColor,
                                         modifier = Modifier
                                             .padding(10.dp)
+                                            .draggableHandle()
                                     )
 
-                                    Text(
-                                        text = if (groceryList.type == "grocery") "Grocery List" else "Generic List",
-                                        fontSize = 18.sp,
-                                        color = Color.Gray,
+                                    Row(
+                                        horizontalArrangement = Arrangement.SpaceBetween,
+                                        verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
-                                            .padding(10.dp)
+                                            .fillMaxWidth()
+                                            .combinedClickable(
+                                                onClick = { navController.navigate("list/${groceryList.id}/${groceryList.type}") },
+                                                onLongClick = { expandedListId = groceryList.id }
+                                            )
+                                    ) {
+                                        Text(
+                                            text = groceryList.name,
+                                            fontSize = 25.sp,
+                                            color = mainTextColor,
+                                            modifier = Modifier.padding(10.dp)
+                                        )
+
+                                        Text(
+                                            text = if (groceryList.type == "grocery") "Grocery List" else "Generic List",
+                                            fontSize = 18.sp,
+                                            color = Color.Gray,
+                                            modifier = Modifier.padding(10.dp)
+                                        )
+                                    }
+                                }
+                                // dropdown menu setup
+                                DropdownMenu(
+                                    expanded = expandedListId == groceryList.id,
+                                    onDismissRequest = { expandedListId = null },
+                                    modifier = Modifier.background(color = Color.White)
+                                ) {
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "Delete",
+                                                fontSize = 18.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        },
+                                        onClick = {
+                                            viewModel.deleteList(listId = groceryList.id)
+                                        }
+                                    )
+
+                                    HorizontalDivider(thickness = 1.dp, color = Color.Black)
+
+                                    DropdownMenuItem(
+                                        text = {
+                                            Text(
+                                                text = "Rename",
+                                                fontSize = 18.sp,
+                                                fontWeight = FontWeight.Bold
+                                            )
+                                        },
+                                        onClick = {
+                                            tempGroceryListId = groceryList.id
+                                            isChangingListName = true
+                                            expandedListId = null
+                                        }
                                     )
                                 }
-                            }
-                            // dropdown menu setup
-                            DropdownMenu(
-                                expanded = expandedListId == groceryList.id,
-                                onDismissRequest = { expandedListId = null },
-                                modifier = Modifier.background(color = Color.White)
-                            ) {
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = "Delete",
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    },
-                                    onClick = {
-                                        viewModel.deleteList(listId = groceryList.id)
-                                    }
-                                )
-
-                                HorizontalDivider(thickness = 1.dp, color = Color.Black)
-
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = "Rename",
-                                            fontSize = 18.sp,
-                                            fontWeight = FontWeight.Bold
-                                        )
-                                    },
-                                    onClick = {
-                                        tempGroceryListId = groceryList.id
-                                        isChangingListName = true
-                                        expandedListId = null
-                                    }
-                                )
                             }
                         }
                     }
@@ -636,11 +677,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                             val exists = viewModel.lists.value.any { it.name == lstName }
 
                                             if (!exists) {
-                                                viewModel.addList(name = lstName, type = "grocery", onComplete = { newId ->
-                                                    lstName = ""
-                                                    isAddingGroceryLst = false
-                                                    navController.navigate("list/${newId}/grocery")
-                                                })
+                                                viewModel.addList(name = lstName, type = "grocery", navController)
                                             } else {
                                                 showDuplicateListNameDialog = true
                                             }
@@ -679,11 +716,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                             val exists = viewModel.lists.value.any { it.name == lstName }
 
                                             if (!exists) {
-                                                viewModel.addList(name = lstName, type = "grocery",onComplete = { newId ->
-                                                    lstName = ""
-                                                    isAddingGroceryLst = false
-                                                    navController.navigate("list/${newId}/grocery")
-                                                })
+                                                viewModel.addList(name = lstName, type = "grocery", navController)
                                             } else {
                                                 showDuplicateListNameDialog = true
                                             }
@@ -739,11 +772,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                             val exists = viewModel.lists.value.any { it.name == lstName }
 
                                             if (!exists) {
-                                                viewModel.addList(name = lstName, type = "generic", onComplete = { newId ->
-                                                    lstName = ""
-                                                    isAddingGenericLst = false
-                                                    navController.navigate("list/${newId}/generic")
-                                                })
+                                                viewModel.addList(name = lstName, type = "generic", navController)
                                             } else {
                                                 showDuplicateListNameDialog = true
                                             }
@@ -782,11 +811,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                                             val exists = viewModel.lists.value.any { it.name == lstName }
 
                                             if (!exists) {
-                                                viewModel.addList(name = lstName, type = "generic", onComplete = { newId ->
-                                                    lstName = ""
-                                                    isAddingGenericLst = false
-                                                    navController.navigate("list/${newId}/generic")
-                                                })
+                                                viewModel.addList(name = lstName, type = "generic", navController)
                                             } else {
                                                 showDuplicateListNameDialog = true
                                             }
@@ -814,6 +839,25 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
     val groceryListObj = viewModel.lists.collectAsState().value.find { it.id == listId }
     val itemLst = groceryListObj?.items?: emptyList()
     val listName = groceryListObj?.name?: ""
+
+    // 2. Create a local mutable state buffer initialized with the database state
+    var localItems by remember { mutableStateOf(emptyList<HomeViewModel.ItemList>()) }
+
+    // 3. Keep local state synced whenever the database emits a fresh list from disk
+    LaunchedEffect(itemLst) {
+        localItems = itemLst
+    }
+
+    val lazyListState = rememberLazyListState()
+
+    // 4. Update local state immediately so it doesn't snap back, then tell VM
+    val reorderableState = rememberReorderableLazyListState(lazyListState = lazyListState) { from, to ->
+        localItems = localItems.toMutableList().apply {
+            add(to.index, removeAt(from.index))
+        }
+        // Tell the viewmodel to write this new arrangement to disk in the background
+        viewModel.updateItemOrder(localItems)
+    }
 
     val settings by viewModel.settings.collectAsState()
 
