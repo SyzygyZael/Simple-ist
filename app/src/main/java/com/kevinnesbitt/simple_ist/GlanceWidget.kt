@@ -62,48 +62,34 @@ fun WidgetContent(viewModel: HomeViewModel) {
     val content = contentListObj?.content?: ""
     val ranges = contentListObj?.transformationRanges?: emptyList()
 
-    val annotatedString = AnnotatedString.Builder(content).apply {
-        ranges.forEach { range ->
-            // Ensure indices stay safely within bounds
-            if (range.start <= content.length && range.end <= content.length) {
-                when (range.type) {
-                    "bold" -> addStyle(
-                        style = SpanStyle(fontWeight = FontWeight.Bold),
-                        start = range.start,
-                        end = range.end
-                    )
-                    "underline" -> addStyle(
-                        style = SpanStyle(textDecoration = TextDecoration.Underline),
-                        start = range.start,
-                        end = range.end
-                    )
-                }
-            }
-        }
-    }.toAnnotatedString()
-
     var barTextColor by remember(settings) {
-        if (settings.barColor == 0xFF111111L || settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
-            mutableStateOf(Color.White)
-        } else {
-            mutableStateOf(Color.Black)
-        }
+        // if (settings.barColor == 0xFF111111L || settings.barColor == 0xFF000000L || settings.barColor == 0xFFFF0000L || settings.barColor == 0xFF0000FFL || settings.barColor == 0xFF808080L || settings.barColor == 0xFFFF69B4L || settings.barColor == 0xFF7851A9L) {
+        //     mutableStateOf(Color.White)
+        // } else {
+        //     mutableStateOf(Color.Black)
+        // }
+
+        mutableStateOf(Color(settings.barTextColor))
     }
 
     var mainTextColor by remember(settings) {
-        if (settings.darkMode) {
-            mutableStateOf(Color.White)
-        } else {
-            mutableStateOf(Color.Black)
-        }
+        // if (settings.darkMode) {
+        //     mutableStateOf(Color.White)
+        // } else {
+        //     mutableStateOf(Color.Black)
+        // }
+
+        mutableStateOf(Color(settings.mainTextColor))
     }
 
     var backgroundColor by remember(settings) {
-        if (settings.darkMode) {
-            mutableLongStateOf(0xFF111111L)
-        } else {
-            mutableLongStateOf(0xFFFFFFFFL)
-        }
+        // if (settings.darkMode) {
+        //     mutableLongStateOf(0xFF111111L)
+        // } else {
+        //     mutableLongStateOf(0xFFFFFFFFL)
+        // }
+
+        mutableLongStateOf(settings.backgroundColor)
     }
 
     val localRanges = remember {
@@ -212,45 +198,6 @@ fun WidgetContent(viewModel: HomeViewModel) {
                     )
                 )
             }
-        }
-    }
-}
-
-@Composable
-fun GlanceRichText(rawText: String, ranges: List<HomeViewModel.TransformationRanges>, settings: SettingsEntity) {
-    // Sort your formatting blocks chronologically by where they start
-    val sortedRanges = ranges.sortedBy { it.start }
-
-    Row {
-        var lastIndex = 0
-
-        sortedRanges.forEach { range ->
-            // 1. Render any plain text that lives BEFORE this styled block
-            if (range.start > lastIndex && range.start <= rawText.length) {
-                val plainText = rawText.substring(lastIndex, range.start)
-                Text(text = plainText)
-            }
-
-            // 2. Render the styled block itself
-            if (range.start < rawText.length) {
-                val endBound = minOf(range.end, rawText.length)
-                val styledText = rawText.substring(range.start, endBound)
-
-                // Determine style configurations
-                val style = when (range.type) {
-                    "bold" -> TextStyle(fontWeight = androidx.glance.text.FontWeight.Bold)
-                    "underline" -> TextStyle(textDecoration = androidx.glance.text.TextDecoration.Underline)
-                    else -> TextStyle()
-                }
-
-                Text(text = styledText, style = style)
-                lastIndex = endBound
-            }
-        }
-
-        // 3. Render any remaining unstyled plain text at the very end
-        if (lastIndex < rawText.length) {
-            Text(text = rawText.substring(lastIndex))
         }
     }
 }

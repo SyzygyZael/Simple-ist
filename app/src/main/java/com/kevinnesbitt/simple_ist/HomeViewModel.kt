@@ -1,6 +1,8 @@
 package com.kevinnesbitt.simple_ist
 
+import android.app.Activity
 import android.app.Application
+import android.net.Uri
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -9,12 +11,23 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.FileOutputStream
+import java.util.UUID
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
-    private val dao = AppDatabase.getDatabase(application).groceryDao()
+    private val billingManager = BillingManager(application)
+    val isPremiumUser: StateFlow<Boolean> = billingManager.isPremium
+
+    fun launchBillingFlow(activity: Activity) {
+        billingManager.launchPurchaseFlow(activity, "premium")
+    }
+
+    private val dao = GroceryDao.AppDatabase.getDatabase(application).groceryDao()
 
     init {
         viewModelScope.launch {
@@ -104,6 +117,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun addImage(listId: Int, imagePath: String) {
+        viewModelScope.launch {
+            dao.insertImagePath(ImageEntity(listId = listId, imagePath = imagePath))
+            GlanceWidget().updateAll(getApplication())
+        }
+    }
+
     fun updateContent(listId: Int, newContent: String) {
         viewModelScope.launch {
             dao.upsertContent(GenericContentEntity(listId = listId, content = newContent))
@@ -166,9 +186,19 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun updateSetting(darkMode: Boolean, barColor: Long, widgetDisplayListId: Int, barTextColor: Long) {
+    fun updateSetting(darkMode: Boolean, barColor: Long, widgetDisplayListId: Int, barTextColor: Long, backgroundColor: Long, mainTextColor: Long, theme: String, barColorString: String, barTextColorString: String) {
         viewModelScope.launch {
-            dao.updateSetting(switch = darkMode, color = barColor, widgetDisplayListId = widgetDisplayListId, barTextColor = barTextColor)
+            dao.updateSetting(
+                switch = darkMode,
+                color = barColor,
+                widgetDisplayListId = widgetDisplayListId,
+                barTextColor = barTextColor,
+                theme = theme,
+                backgroundColor = backgroundColor,
+                mainTextColor = mainTextColor,
+                barColorString = barColorString,
+                barTextColorString = barTextColorString
+            )
             GlanceWidget().updateAll(getApplication())
         }
     }
@@ -205,6 +235,62 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun handleSelectedImage(uri: Uri, currentText: String, onUpdated: (String) -> Unit) {
+        viewModelScope.launch {
+            val permanentPath = saveImageToInternalStorage(uri)
+
+            if (permanentPath != null) {
+                // Construct your custom image token string
+                val updatedText = currentText + "\n[[image:$permanentPath]]\n"
+
+                // Pass the updated string back to your UI to update the state / save to Room
+                onUpdated(updatedText)
+            }
+        }
+    }
+
+    fun getImagePathsForList(listId: Int): StateFlow<List<String>> {
+        return dao.getAllImagePaths(listId)
+            .map { entityList ->
+                // Extract just the string path from each entity
+                entityList.map { it.imagePath }
+            }
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
+    }
+
+    private suspend fun saveImageToInternalStorage(uri: Uri): String? = withContext(Dispatchers.IO) {
+        try {
+            val context = getApplication<Application>().applicationContext
+
+            // 1. Create a dedicated folder inside your app's private internal storage
+            val directory = File(context.filesDir, "note_images")
+            if (!directory.exists()) {
+                directory.mkdirs()
+            }
+
+            // 2. Create a unique filename so photos never overwrite each other
+            val fileName = "img_${UUID.randomUUID()}.jpg"
+            val file = File(directory, fileName)
+
+            // 3. Open streams to copy the bytes from the temporary URI to your permanent file
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                FileOutputStream(file).use { outputStream ->
+                    inputStream.copyTo(outputStream)
+                }
+            }
+
+            // 4. Return the absolute permanent file path string!
+            return@withContext file.absolutePath
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return@withContext null
+        }
+    }
+
     data class GroceryList(
         val id: Int,
         val name: String,
@@ -233,5 +319,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         val listId: Int,
         val content: String,
         val transformationRanges: List<TransformationRanges>
+    )
+
+    data class ImagePaths(
+        val listId: Int,
+        val imagePath: String
     )
 }

@@ -14,7 +14,7 @@ android {
 
     defaultConfig {
         applicationId = "com.kevinnesbitt.simple_ist"
-        minSdk = 26
+        minSdk = 28
         targetSdk = 36
         versionCode = 1
         versionName = "1.0"
@@ -53,6 +53,8 @@ dependencies {
     implementation("androidx.room:room-runtime:2.7.1")
     implementation("androidx.room:room-ktx:2.7.1")
     implementation("sh.calvin.reorderable:reorderable:2.4.3")
+    implementation("com.android.billingclient:billing:7.0.0")
+    implementation("com.google.android.material:material:1.12.0")
     implementation("androidx.compose.material:material-icons-extended")
     // Main Glance Widget support
     implementation("androidx.glance:glance-appwidget:1.1.1")

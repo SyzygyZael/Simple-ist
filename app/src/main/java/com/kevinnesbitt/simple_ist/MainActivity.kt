@@ -1,17 +1,24 @@
 package com.kevinnesbitt.simple_ist
 
-import android.R
+import android.app.Activity
+import android.graphics.BitmapFactory
+import android.net.Uri
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
@@ -38,8 +45,6 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CardElevation
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -62,10 +67,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalWindowInfo
 import androidx.compose.ui.text.TextRange
@@ -157,14 +166,26 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    fun addPhotoToContentText(currentContent: String, savedPhotoPath: String): String {
+        // Using a clear delimiter like brackets makes parsing 100% reliable
+        val photoToken = "\n[[image:$savedPhotoPath]]\n"
+        return currentContent + photoToken
+    }
 }
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
+    // val isPremium by viewModel.isPremiumUser.collectAsState()
+    val isPremium = false
+
+    val context = LocalContext.current
+    val activity = context as Activity
+
     val settings by viewModel.settings.collectAsState()
     // 1. Get the source of truth stream from ViewModel
-    val databaseLists by viewModel.lists.collectAsState()
+    val databaseLists by viewModel.lists.collectAsStateWithLifecycle()
 
     // 2. Create a local mutable state buffer initialized with the database state
     var localLists by remember { mutableStateOf(emptyList<HomeViewModel.GroceryList>()) }
@@ -190,19 +211,23 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
     }
 
     var mainTextColor by remember(settings) {
-        if (settings.darkMode) {
-            mutableStateOf(Color.White)
-        } else {
-            mutableStateOf(Color.Black)
-        }
+        // if (settings.darkMode) {
+        //     mutableStateOf(Color.White)
+        // } else {
+        //     mutableStateOf(Color.Black)
+        // }
+
+        mutableStateOf(Color(settings.mainTextColor))
     }
 
     var backgroundColor by remember(settings) {
-        if (settings.darkMode) {
-            mutableLongStateOf(0xFF111111L)
-        } else {
-            mutableLongStateOf(0xFFFFFFFFL)
-        }
+        // if (settings.darkMode) {
+        //     mutableLongStateOf(0xFF111111L)
+        // } else {
+        //     mutableLongStateOf(0xFFFFFFFFL)
+        // }
+
+        mutableLongStateOf(settings.backgroundColor)
     }
 
     var dropdownColor by remember(settings) {
@@ -249,6 +274,10 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
         mutableStateOf(false)
     }
 
+    var promptPremiumDialogue by remember {
+        mutableStateOf(false)
+    }
+
     Scaffold(modifier = Modifier
         .fillMaxSize(),
         bottomBar = {
@@ -278,7 +307,13 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
 
                 Button(
                     onClick = {
-                    isChoosingListType = true
+                        if (isPremium) {
+                            isChoosingListType = true
+                        } else if (databaseLists.size > 3) {
+                            promptPremiumDialogue = true
+                        } else {
+                            isChoosingListType = true
+                        }
                 },
                     modifier = Modifier
                         .align(Alignment.CenterVertically)
@@ -641,6 +676,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                 }
             }
 
+            // add grocery list
             if (isAddingGroceryLst) {
                 Dialog(
                     onDismissRequest = { isAddingGroceryLst = false }
@@ -736,6 +772,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                 }
             }
 
+            // add generic list
             if (isAddingGenericLst) {
                 Dialog(
                     onDismissRequest = { isAddingGenericLst = false }
@@ -830,6 +867,64 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                     }
                 }
             }
+
+            // prompt premium for more lists
+            if (promptPremiumDialogue) {
+                Dialog(
+                    onDismissRequest = { promptPremiumDialogue = false }
+                ) {
+                    Surface(
+                        color = Color.White,
+                        modifier = Modifier.size(350.dp, 200.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        border = BorderStroke(2.dp, Color.Gray)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Get Premium to make more lists!",
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(7.dp),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = "Enjoy extra features with Premium.",
+                                fontSize = 13.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Button(
+                                onClick = { viewModel.launchBillingFlow(activity) },
+                                colors = ButtonColors(
+                                    contentColor = Color.Black,
+                                    containerColor = Color.Cyan,
+                                    disabledContentColor = Color.Black,
+                                    disabledContainerColor = Color.Cyan
+                                )
+                            ) {
+                                Text(
+                                    text = "Get Premium!",
+                                    fontSize = 18.sp,
+                                    modifier = Modifier.padding(7.dp),
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -867,19 +962,23 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
     }
 
     var mainTextColor by remember(settings) {
-        if (settings.darkMode) {
-            mutableStateOf(Color.White)
-        } else {
-            mutableStateOf(Color.Black)
-        }
+        // if (settings.darkMode) {
+        //     mutableStateOf(Color.White)
+        // } else {
+        //     mutableStateOf(Color.Black)
+        // }
+
+        mutableStateOf(Color(settings.mainTextColor))
     }
 
     var backgroundColor by remember(settings) {
-        if (settings.darkMode) {
-            mutableLongStateOf(0xFF111111L)
-        } else {
-            mutableLongStateOf(0xFFFFFFFFL)
-        }
+        // if (settings.darkMode) {
+        //     mutableLongStateOf(0xFF111111L)
+        // } else {
+        //     mutableLongStateOf(0xFFFFFFFFL)
+        // }
+
+        mutableLongStateOf(settings.backgroundColor)
     }
 
     var newListName by remember {
@@ -1285,12 +1384,21 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GenericListScreen(listId: Int, navController: NavController, viewModel: HomeViewModel) {
+    // val isPremium by viewModel.isPremiumUser.collectAsState()
+    val isPremium = true
+
+    val context = LocalContext.current
+    val activity = context as Activity
+
     val groceryListObj = viewModel.lists.collectAsState().value.find { it.id == listId }
     val listName = groceryListObj?.name?: ""
 
     val contentListObj = viewModel.contentList.collectAsState().value.find { it.listId == listId }
     val content = contentListObj?.content?: ""
     val ranges = contentListObj?.transformationRanges?: emptyList()
+
+    // 1. Grab the stream as a standard Compose state object
+    val imagePaths by viewModel.getImagePathsForList(listId).collectAsState()
 
     val settings by viewModel.settings.collectAsState()
 
@@ -1299,19 +1407,23 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
     }
 
     var mainTextColor by remember(settings) {
-        if (settings.darkMode) {
-            mutableStateOf(Color.White)
-        } else {
-            mutableStateOf(Color.Black)
-        }
+        // if (settings.darkMode) {
+        //     mutableStateOf(Color.White)
+        // } else {
+        //     mutableStateOf(Color.Black)
+        // }
+
+        mutableStateOf(Color(settings.mainTextColor))
     }
 
     var backgroundColor by remember(settings) {
-        if (settings.darkMode) {
-            mutableLongStateOf(0xFF111111L)
-        } else {
-            mutableLongStateOf(0xFFFFFFFFL)
-        }
+        // if (settings.darkMode) {
+        //     mutableLongStateOf(0xFF111111L)
+        // } else {
+        //     mutableLongStateOf(0xFFFFFFFFL)
+        // }
+
+        mutableLongStateOf(settings.backgroundColor)
     }
 
     var isChangingListName by remember {
@@ -1324,10 +1436,6 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 
     var showSideBar by remember {
         mutableStateOf(false)
-    }
-
-    var listText by remember {
-        mutableStateOf(TextFieldValue(text = ""))
     }
 
     var bulletList by remember {
@@ -1358,16 +1466,47 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         mutableStateListOf<HomeViewModel.TransformationRanges>()
     }
 
+    var listText by remember {
+        mutableStateOf(TextFieldValue(text = "", selection = if (bulletList) TextRange(2) else TextRange.Zero))
+    }
+
+    var isInitialized by remember { mutableStateOf(false) }
+
     LaunchedEffect(content, ranges) {
-        // Only overwrite the text field if it's currently empty (e.g., initial cold launch)
-        if (listText.text.isEmpty() && content.isNotEmpty()) {
+        // 1. Only populate if we haven't initialized yet and database text finally arrives
+        if (!isInitialized && content.isNotEmpty()) {
             listText = TextFieldValue(text = content, selection = TextRange(content.length))
+            isInitialized = true
+        } else if (!isInitialized && contentListObj != null && content.isEmpty()) {
+            // If the database object loaded successfully but it's genuinely an empty note
+            isInitialized = true
         }
 
-        // Sync down your formatting style rules cleanly
+        // 2. Sync down your formatting style rules cleanly
         if (localRanges.isEmpty() && ranges.isNotEmpty()) {
             localRanges.addAll(ranges)
         }
+    }
+
+    val pickMediaLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            // 1. Pass a blank placeholder or text state to save the image to disk
+            viewModel.handleSelectedImage(uri, "") { updatedTextWithPhotoTag ->
+                val rawPath = updatedTextWithPhotoTag
+                    .replace("\n", "")
+                    .removePrefix("[[image:")
+                    .removeSuffix("]]")
+
+                // 2. ✨ SAVE TO DATABASE: Call your ViewModel to store the string directly in the table row
+                viewModel.addImage(listId = listId, imagePath = rawPath)
+            }
+        }
+    }
+
+    var promptPremiumPhotoInsert by remember {
+        mutableStateOf(false)
     }
 
     val density = LocalDensity.current
@@ -1487,12 +1626,56 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
             ) {
                 LazyColumn(modifier = Modifier.imePadding()) {
                     item {
+                        // 2. You now have a clean, standard List<String> to use anywhere!
+                        // For example, to draw all images at the top of your note like Google Keep:
+                        if (imagePaths.isNotEmpty()) {
+                            Row(
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                imagePaths.forEach { path ->
+                                    val bitmap = remember(path) {
+                                        BitmapFactory.decodeFile(path)?.asImageBitmap()
+                                    }
+                                    if (bitmap != null) {
+                                        Image(
+                                            bitmap = bitmap,
+                                            contentDescription = "Note Image",
+                                            modifier = Modifier
+                                                .size(100.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
                         BasicTextField(
                             value = listText,
                             onValueChange = { newText ->
-                                val currentText = newText.text
                                 val oldText = listText.text
-                                val cursorPos = newText.selection.start
+                                var currentText = newText.text
+                                var selectionStart = newText.selection.start
+                                var selectionEnd = newText.selection.end
+
+                                // 1. DETERMINE BULLET MODIFICATIONS FIRST
+                                val isBulletAddition = currentText.endsWith("\n") && bulletList
+                                val isBulletDeletion = oldText.endsWith("\n    • ") && currentText.length < oldText.length
+
+                                if (isBulletAddition) {
+                                    currentText += "    • "
+                                    // Push the selection cursor past the generated bullet point
+                                    selectionStart += 6
+                                    selectionEnd += 6
+                                } else if (isBulletDeletion) {
+                                    currentText = currentText.dropLast(5)
+                                    selectionStart = maxOf(0, selectionStart - 5)
+                                    selectionEnd = maxOf(0, selectionEnd - 5)
+                                }
+
+                                // 2. NOW EXECUTE RANGE ADJUSTMENTS BASED ON THE TRUE FINAL TEXT LENGTH
+                                val lengthDifference = currentText.length - oldText.length
+                                val cursorPos = selectionStart
 
                                 var decorType = ""
                                 if (boldLetters) decorType += "bold"
@@ -1501,9 +1684,9 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 if (bigHeader) decorType += "bigHeader"
                                 if (biggerHeader) decorType += "biggerHeader"
 
-                                // === NEW MID-TEXT TYPING LOGIC STARTS HERE ===
-                                if (currentText.length > oldText.length) {
-                                    val typedIndex = cursorPos - 1
+                                if (lengthDifference > 0) {
+                                    // Find the index where the typing actually started
+                                    val typedIndex = maxOf(0, cursorPos - lengthDifference)
 
                                     // 1. Look for an existing formatting range that the cursor is currently inside of
                                     val targetRangeIndex = localRanges.indexOfFirst { range ->
@@ -1511,18 +1694,17 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                     }
 
                                     if (targetRangeIndex != -1 && localRanges[targetRangeIndex].type == decorType) {
-                                        // SCENARIO A: Typing inside a range of the SAME style -> Expand its boundary by 1
+                                        // SCENARIO A: Expand matching style by the actual amount of characters inserted
                                         val affectedRange = localRanges[targetRangeIndex]
-                                        val updatedRange = affectedRange.copy(end = affectedRange.end + 1)
+                                        val updatedRange = affectedRange.copy(end = affectedRange.end + lengthDifference)
                                         localRanges[targetRangeIndex] = updatedRange
                                         viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
                                     } else if (decorType.isNotEmpty()) {
-                                        // SCENARIO B: Typing with active styles where no matching range exists -> Create new
-                                        android.util.Log.d("Decor Type", "type = $decorType")
-                                        val newRange = HomeViewModel.TransformationRanges(id = 0, listId, decorType, typedIndex, cursorPos)
+                                        // SCENARIO B: Create new range spanning the added text length
+                                        val newRange = HomeViewModel.TransformationRanges(id = 0, listId, decorType, typedIndex, typedIndex + lengthDifference)
                                         localRanges.add(newRange)
 
-                                        viewModel.addTransformationRange(listId, decorType, typedIndex, cursorPos) { realId ->
+                                        viewModel.addTransformationRange(listId, decorType, typedIndex, typedIndex + lengthDifference) { realId ->
                                             val index = localRanges.indexOfFirst { it.id == 0 && it.start == typedIndex }
                                             if (index != -1) {
                                                 localRanges[index] = localRanges[index].copy(id = realId)
@@ -1530,21 +1712,21 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                         }
                                     }
 
-                                    // Shift ALL formatting ranges that start AFTER your typing position forward by 1
+                                    // Shift ALL formatting ranges downstream by the real length difference
                                     for (i in localRanges.indices) {
                                         val range = localRanges[i]
                                         if (range.start >= typedIndex && i != targetRangeIndex && range.id != 0) {
-                                            val shiftedRange = range.copy(start = range.start + 1, end = range.end + 1)
+                                            val shiftedRange = range.copy(start = range.start + lengthDifference, end = range.end + lengthDifference)
                                             localRanges[i] = shiftedRange
                                             viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
                                         }
                                     }
-                                    // === NEW MID-TEXT TYPING LOGIC ENDS HERE ===
 
-                                } else if (currentText.length < oldText.length) {
+                                } else if (lengthDifference < 0) {
+                                    val absoluteDiff = kotlin.math.abs(lengthDifference)
                                     val deletedIndex = cursorPos
 
-                                    // Find the index of the range that contained the deleted letter
+                                    // Find the range containing the deleted chunk
                                     val targetRangeIndex = localRanges.indexOfFirst { range ->
                                         deletedIndex >= range.start && deletedIndex < range.end
                                     }
@@ -1552,49 +1734,36 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                     if (targetRangeIndex != -1) {
                                         val affectedRange = localRanges[targetRangeIndex]
 
-                                        // If the range only had 1 character left, remove it entirely
-                                        if (affectedRange.start == affectedRange.end - 1) {
+                                        // If the chunk removal leaves the range empty or inverted, kill it
+                                        if (affectedRange.start >= affectedRange.end - absoluteDiff) {
                                             localRanges.removeAt(targetRangeIndex)
                                             viewModel.deleteTransformationRange(affectedRange.id)
                                         } else {
-                                            // Shrink the affected range by 1
-                                            val updatedRange = affectedRange.copy(end = affectedRange.end - 1)
+                                            // Shrink the boundary down cleanly
+                                            val updatedRange = affectedRange.copy(end = affectedRange.end - absoluteDiff)
                                             localRanges[targetRangeIndex] = updatedRange
                                             viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
                                         }
                                     }
 
-                                    // Shift ALL formatting ranges that come after the deletion point backward by 1
+                                    // Pull downstream formatting ranges backward by the exact size of the deleted chunk
                                     for (i in localRanges.indices) {
                                         val range = localRanges[i]
                                         if (range.start > deletedIndex) {
-                                            val shiftedRange = range.copy(start = range.start - 1, end = range.end - 1)
+                                            val shiftedRange = range.copy(start = range.start - absoluteDiff, end = range.end - absoluteDiff)
                                             localRanges[i] = shiftedRange
                                             viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
                                         }
                                     }
                                 }
 
-                                // Process bullet indentation markers
-                                val updatedText = when {
-                                    currentText.endsWith("\n") && bulletList -> {
-                                        "$currentText    • "
-                                    }
-                                    oldText.endsWith("\n    • ") && currentText.length < oldText.length -> {
-                                        currentText.dropLast(5)
-                                    }
-                                    currentText.isEmpty() -> {
-                                        ""
-                                    }
-                                    else -> {
-                                        currentText
-                                    }
-                                }
+                                // 3. APPLY UPDATE STATE WITH EXPLICIT CURSOR BOUNDS
+                                listText = newText.copy(
+                                    text = currentText,
+                                    selection = androidx.compose.ui.text.TextRange(selectionStart, selectionEnd)
+                                )
 
-                                // Safely copy state while fully preserving dynamic cursor location
-                                listText = newText.copy(text = updatedText)
-
-                                viewModel.updateContent(listId, updatedText)
+                                viewModel.updateContent(listId, currentText)
                             },
                             keyboardOptions = KeyboardOptions(
                                 imeAction = ImeAction.Default
@@ -1759,6 +1928,92 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 textAlign = TextAlign.Center
                             )
                         }
+
+                        Button(
+                            modifier = Modifier.size(55.dp, 55.dp),
+                            onClick = {
+                                if (isPremium) {
+                                    pickMediaLauncher.launch(
+                                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                    )
+                                } else {
+                                    promptPremiumPhotoInsert = true
+                                }
+                            },
+                            colors = ButtonColors(
+                                containerColor = if (!biggerHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                contentColor = mainTextColor,
+                                disabledContentColor = mainTextColor,
+                                disabledContainerColor = if (!biggerHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                            ),
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = "\uD83D\uDDBC",
+                                fontSize = 23.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    }
+                }
+            }
+
+            // DIALOG BOXES
+
+            // prompt premium for themes
+            if (promptPremiumPhotoInsert) {
+                Dialog(
+                    onDismissRequest = { promptPremiumPhotoInsert = false }
+                ) {
+                    Surface(
+                        color = Color.White,
+                        modifier = Modifier.size(350.dp, 200.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        border = BorderStroke(2.dp, Color.Gray)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Get Premium to insert pictures!",
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(7.dp),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = "Enjoy extra features with Premium.",
+                                fontSize = 13.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Button(
+                                onClick = { viewModel.launchBillingFlow(activity) },
+                                colors = ButtonColors(
+                                    contentColor = Color.Black,
+                                    containerColor = Color.Cyan,
+                                    disabledContentColor = Color.Black,
+                                    disabledContainerColor = Color.Cyan
+                                )
+                            ) {
+                                Text(
+                                    text = "Get Premium!",
+                                    fontSize = 18.sp,
+                                    modifier = Modifier.padding(7.dp),
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -1768,6 +2023,12 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
+    // val isPremium by viewModel.isPremiumUser.collectAsState()
+    val isPremium = true
+
+    val context = LocalContext.current
+    val activity = context as Activity
+
     val settings by viewModel.settings.collectAsState()
     val groceryListObj = viewModel.lists.collectAsState().value.find { it.id == settings.widgetDisplayListId }
     val listIds by viewModel.listIds.collectAsStateWithLifecycle()
@@ -1780,7 +2041,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
         "Blue" to 0xFF0000FFL,
         "Yellow" to 0xFFFFFF00L,
         "Gray" to 0xFF808080L,
-        "Dark Gray" to 0xFF111111L,
+        "Dark Gray" to 0xFF222222L,
         "Pink" to 0xFFFF69B4L,
         "Royal Purple" to 0xFF7851A9L
     )
@@ -1790,32 +2051,40 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
         "White" to 0xFFFFFFFFL
     )
 
-    var barTextColor by remember(settings) {
-        mutableStateOf(Color(settings.barTextColor))
-    }
-
     var mainTextColor by remember(settings) {
-        if (settings.darkMode) {
-            mutableStateOf(Color.White)
-        } else {
-            mutableStateOf(Color.Black)
-        }
+        // if (settings.theme != "Default") {
+        //     mutableLongStateOf(0xFF000000L)
+        // } else if (!settings.darkMode){
+        //     mutableLongStateOf(0xFF000000L)
+        // } else if (settings.darkMode) {
+        //     mutableLongStateOf(0xFFFFFFFFL)
+        // } else {
+        //     mutableLongStateOf(settings.mainTextColor)
+        // }
+
+        mutableLongStateOf(settings.mainTextColor)
     }
 
     var backgroundColor by remember(settings) {
-        if (settings.darkMode) {
-            mutableLongStateOf(0xFF111111L)
-        } else {
-            mutableLongStateOf(0xFFFFFFFFL)
-        }
-    }
+        // if (settings.theme != "Default") {
+        //     mutableLongStateOf(settings.backgroundColor)
+        // } else if (!settings.darkMode) {
+        //     mutableLongStateOf(0xFFFFFFFFL)
+        // } else if (settings.darkMode) {
+        //     mutableLongStateOf(0xFF111111L)
+        // } else {
+        //     mutableLongStateOf(settings.backgroundColor)
+        // }
 
-    var darkModeSwitch by remember(settings) {
-        mutableStateOf(settings.darkMode)
+        mutableLongStateOf(settings.backgroundColor)
     }
 
     var barColorChoice by remember(settings) {
         mutableLongStateOf(settings.barColor)
+    }
+
+    var darkModeSwitch by remember(settings) {
+        mutableStateOf(settings.darkMode)
     }
 
     var barTextColorChoice by remember(settings) {
@@ -1831,11 +2100,17 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
     }
 
     var barColorChoiceString by remember(settings) {
-        mutableStateOf(colorDict.entries.find { pair -> pair.value == settings.barColor }?.key?: "Yellow")
+        // mutableStateOf(colorDict.entries.find { pair -> pair.value == settings.barColor }?.key?: "Yellow")
+        mutableStateOf(settings.barColorString)
     }
 
     var barTextColorChoiceString by remember(settings) {
-        mutableStateOf(textColorDict.entries.find { pair -> pair.value == settings.barTextColor }?.key?: "Black")
+        // mutableStateOf(textColorDict.entries.find { pair -> pair.value == settings.barTextColor }?.key?: "Black")
+        mutableStateOf(settings.barTextColorString)
+    }
+
+    var themeChoiceString by remember(settings) {
+        mutableStateOf(settings.theme)
     }
 
     var isChoosingBarColor by remember {
@@ -1847,6 +2122,14 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
     }
 
     var isChoosingBarTextColor by remember {
+        mutableStateOf(false)
+    }
+
+    var isChoosingTheme by remember {
+        mutableStateOf(false)
+    }
+
+    var promptPremium by remember {
         mutableStateOf(false)
     }
 
@@ -1867,11 +2150,11 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 .fillMaxSize()
                 .padding(innerPadding)
                 .background(color = Color(backgroundColor))
-        ) {
+        )  {
             // top bar name and buttons
             Row(modifier = Modifier
                 .fillMaxWidth()
-                .background(Color(settings.barColor)),
+                .background(Color(barColorChoice)),
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
@@ -1879,13 +2162,23 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 Button(
                     onClick = {
                         navController.navigate("home")
-                        viewModel.updateSetting(darkMode = darkModeSwitch, barColor = barColorChoice, widgetDisplayListId = chosenWidgetListId, barTextColor = barTextColorChoice)
+                        viewModel.updateSetting(
+                            darkMode = darkModeSwitch,
+                            barColor = barColorChoice,
+                            widgetDisplayListId = chosenWidgetListId,
+                            barTextColor = barTextColorChoice,
+                            theme = themeChoiceString,
+                            backgroundColor = backgroundColor,
+                            mainTextColor = mainTextColor,
+                            barColorString = barColorChoiceString,
+                            barTextColorString = barTextColorChoiceString
+                        )
                     },
                     colors = ButtonColors(
-                        containerColor = Color(settings.barColor),
-                        contentColor = barTextColor,
-                        disabledContentColor = barTextColor,
-                        disabledContainerColor = Color(settings.barColor)
+                        containerColor = Color(barColorChoice),
+                        contentColor = Color(barTextColorChoice),
+                        disabledContentColor = Color(barTextColorChoice),
+                        disabledContainerColor = Color(barColorChoice)
                     )
                 ) {
                     Text(text = "Apply", fontSize = 17.sp, fontWeight = FontWeight.Bold)
@@ -1896,12 +2189,12 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                     textAlign = TextAlign.Center,
                     fontSize = 27.sp,
                     fontWeight = FontWeight.Bold,
-                    color = barTextColor
+                    color = Color(barTextColorChoice)
                 )
                 Text(text = "              ")
             }
 
-            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
+            HorizontalDivider(thickness = 2.dp, color = Color(mainTextColor))
 
             // SETTINGS
 
@@ -1913,17 +2206,32 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Dark Mode", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = mainTextColor)
+                Text(text = "Dark Mode", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = Color(mainTextColor))
                 Switch(
                     checked = darkModeSwitch,
                     onCheckedChange = {
-                         darkModeSwitch = !darkModeSwitch
+                        darkModeSwitch = !darkModeSwitch
+                        if (darkModeSwitch) {
+                            backgroundColor = 0xFF222222L
+                            mainTextColor = 0xFFFFFFFFL
+                        } else {
+                            backgroundColor = 0xFFFFFFFFL
+                            mainTextColor = 0xFF000000L
+                        }
+
+                        if (settings.barTextColorString == "Theme" || settings.barColorString == "Theme") {
+                            barColorChoice = 0xFFFFFF00L
+                            barTextColorChoice = 0xFF000000L
+                            themeChoiceString = "Default"
+                            barTextColorChoiceString = "Black"
+                            barColorChoiceString = "Yellow"
+                        }
                     },
                     modifier = Modifier.padding(10.dp)
                 )
             }
 
-            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
+            HorizontalDivider(thickness = 2.dp, color = Color(mainTextColor))
 
             // bar color
             Row(
@@ -1933,7 +2241,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Bar Color", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = mainTextColor)
+                Text(text = "Bar Color", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = Color(mainTextColor))
                 Card(
                     border = BorderStroke(2.dp, color = Color.Gray),
                     modifier = Modifier
@@ -1959,6 +2267,14 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                                 onClick = {
                                     barColorChoice = colorDict[color]?:0xFFFFFF00L
                                     barColorChoiceString = color
+
+                                    if (themeChoiceString != "Default") {
+                                        barTextColorChoiceString = "Black"
+                                        barTextColorChoice = 0xFF000000L
+                                        themeChoiceString = "Default"
+                                        backgroundColor = if (!darkModeSwitch) 0xFFFFFFFFL else 0xFF000000L
+                                    }
+
                                     isChoosingBarColor = false
                                 }
                             )
@@ -1967,7 +2283,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 }
             }
 
-            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
+            HorizontalDivider(thickness = 2.dp, color = Color(mainTextColor))
 
             // bar text color
             Row(
@@ -1977,7 +2293,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Bar Text Color", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = mainTextColor)
+                Text(text = "Bar Text Color", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = Color(mainTextColor))
                 Card(
                     border = BorderStroke(2.dp, color = Color.Gray),
                     modifier = Modifier
@@ -2003,6 +2319,14 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                                 onClick = {
                                     barTextColorChoice = textColorDict[color]?:0xFF000000L
                                     barTextColorChoiceString = color
+
+                                    if (themeChoiceString != "Default") {
+                                        barColorChoiceString = "Yellow"
+                                        barColorChoice = 0xFFFFFF00L
+                                        themeChoiceString = "Default"
+                                        backgroundColor = if (!darkModeSwitch) 0xFFFFFFFFL else 0xFF000000L
+                                    }
+
                                     isChoosingBarTextColor = false
                                 }
                             )
@@ -2011,7 +2335,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 }
             }
 
-            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
+            HorizontalDivider(thickness = 2.dp, color = Color(mainTextColor))
 
             // choose list to display on widget
             Row(
@@ -2021,7 +2345,7 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(text = "Widget Display List", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = mainTextColor)
+                Text(text = "Widget Display List", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = Color(mainTextColor))
                 Card(
                     border = BorderStroke(2.dp, color = Color.Gray),
                     modifier = Modifier
@@ -2055,7 +2379,280 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
                 }
             }
 
-            HorizontalDivider(thickness = 2.dp, color = mainTextColor)
+            HorizontalDivider(thickness = 2.dp, color = Color(mainTextColor))
+
+            // choose app theme
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color(backgroundColor)),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(text = "Theme", modifier = Modifier.padding(21.dp), fontSize = 18.sp, color = Color(mainTextColor))
+                Card(
+                    border = BorderStroke(2.dp, color = Color.Gray),
+                    modifier = Modifier
+                        .size(200.dp, 60.dp)
+                        .padding(10.dp)
+                        .clickable(
+                            onClick = {
+                                if (isPremium) isChoosingTheme = true else promptPremium = true
+                            }
+                        )
+                ) {
+                    Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                        Text(text = themeChoiceString)
+                    }
+                    DropdownMenu(
+                        expanded = isChoosingTheme,
+                        onDismissRequest = { isChoosingTheme = false },
+                        modifier = Modifier.heightIn(max = 180.dp)
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(text = "Default") },
+                            onClick = {
+                                themeChoiceString = "Default"
+                                backgroundColor = 0xFFFFFFFFL
+                                barColorChoice = 0xFFFFFF00L
+                                mainTextColor = 0xFF000000L
+                                barTextColorChoice = 0xFF000000L
+
+                                barColorChoiceString = "Yellow"
+                                barTextColorChoiceString = "Black"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "Midnight OLED") },
+                            onClick = {
+                                themeChoiceString = "Midnight OLED"
+                                backgroundColor = 0xFF000000L
+                                barColorChoice = 0xFF121212L
+                                mainTextColor = 0xFFFFFFFFL
+                                barTextColorChoice = 0xFFBB86FCL
+
+                                barColorChoiceString = "Theme"
+                                barTextColorChoiceString = "Theme"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "Rose Gold Luxury") },
+                            onClick = {
+                                themeChoiceString = "Rose Gold Luxury"
+                                backgroundColor = 0xFFFFF5F5L
+                                barColorChoice = 0xFFE0A9A5L
+                                mainTextColor = 0xFF4A3535L
+                                barTextColorChoice = 0xFFFFFFFFL
+
+                                barColorChoiceString = "Theme"
+                                barTextColorChoiceString = "Theme"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "Matcha Latte") },
+                            onClick = {
+                                themeChoiceString = "Matcha Latte"
+                                backgroundColor = 0xFFF4F7F4L
+                                barColorChoice = 0xFFA3B899L
+                                mainTextColor = 0xFF2D3B26L
+                                barTextColorChoice = 0xFFFFFFFFL
+
+                                barColorChoiceString = "Theme"
+                                barTextColorChoiceString = "Theme"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "Cyberpunk") },
+                            onClick = {
+                                themeChoiceString = "Cyberpunk"
+                                backgroundColor = 0xFF1A1A24L
+                                barColorChoice = 0xFF252538L
+                                mainTextColor = 0xFF00FFFFL
+                                barTextColorChoice = 0xFFFF007FL
+
+                                barColorChoiceString = "Theme"
+                                barTextColorChoiceString = "Theme"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(text = "Nordic Drift") },
+                            onClick = {
+                                themeChoiceString = "Nordic Drift"
+                                backgroundColor = 0xFFF0F4F8L
+                                barColorChoice = 0xFF334E68L
+                                mainTextColor = 0xFF102A43L
+                                barTextColorChoice = 0xFF9FB3C8L
+
+                                barColorChoiceString = "Theme"
+                                barTextColorChoiceString = "Theme"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text(text = "Minimal Charcoal") },
+                            onClick = {
+                                themeChoiceString = "Minimal Charcoal"
+                                backgroundColor = 0xFFF8F9FA
+                                barColorChoice = 0xFF212529
+                                mainTextColor = 0xFF343A40
+                                barTextColorChoice = 0xFFF8F9FA
+
+                                barColorChoiceString = "Theme"
+                                barTextColorChoiceString = "Theme"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text(text = "Creamy Green") },
+                            onClick = {
+                                themeChoiceString = "Creamy Green"
+                                backgroundColor = 0xFFF4F6F0
+                                barColorChoice = 0xFF4A5D4E
+                                mainTextColor = 0xFF2A362D
+                                barTextColorChoice = 0xFFF4F6F0
+
+                                barColorChoiceString = "Theme"
+                                barTextColorChoiceString = "Theme"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text(text = "Cool Steel") },
+                            onClick = {
+                                themeChoiceString = "Cool Steel"
+                                backgroundColor = 0xFFF1F5F9
+                                barColorChoice = 0xFF1E293B
+                                mainTextColor = 0xFF0F172A
+                                barTextColorChoice = 0xFF38BDF8
+
+                                barColorChoiceString = "Theme"
+                                barTextColorChoiceString = "Theme"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text(text = "Warm Terracotta") },
+                            onClick = {
+                                themeChoiceString = "Warm Terracotta"
+                                backgroundColor = 0xFFFEFAE0
+                                barColorChoice = 0xFF8D4B38
+                                mainTextColor = 0xFF3D2018
+                                barTextColorChoice = 0xFFFEFAE0
+
+                                barColorChoiceString = "Theme"
+                                barTextColorChoiceString = "Theme"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+
+                        DropdownMenuItem(
+                            text = { Text(text = "Cyber Grape") },
+                            onClick = {
+                                themeChoiceString = "Cyber Grape"
+                                backgroundColor = 0xFF121212
+                                barColorChoice = 0xFF1F1F1F
+                                mainTextColor = 0xFFE1E1E1
+                                barTextColorChoice = 0xFFBB86FC
+
+                                barColorChoiceString = "Theme"
+                                barTextColorChoiceString = "Theme"
+
+                                darkModeSwitch = false
+                                isChoosingTheme = false
+                            }
+                        )
+                    }
+                }
+            }
+
+            // DIALOG BOXES
+
+            // prompt premium for themes
+            if (promptPremium) {
+                Dialog(
+                    onDismissRequest = { promptPremium = false }
+                ) {
+                    Surface(
+                        color = Color.White,
+                        modifier = Modifier.size(350.dp, 200.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        border = BorderStroke(2.dp, Color.Gray)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Get Premium to use themes!",
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(7.dp),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = "Enjoy extra features with Premium.",
+                                fontSize = 13.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Button(
+                                onClick = { viewModel.launchBillingFlow(activity) },
+                                colors = ButtonColors(
+                                    contentColor = Color.Black,
+                                    containerColor = Color.Cyan,
+                                    disabledContentColor = Color.Black,
+                                    disabledContainerColor = Color.Cyan
+                                )
+                            ) {
+                                Text(
+                                    text = "Get Premium!",
+                                    fontSize = 18.sp,
+                                    modifier = Modifier.padding(7.dp),
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
