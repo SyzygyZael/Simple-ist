@@ -2,8 +2,19 @@ package com.kevinnesbitt.simple_ist
 
 import android.app.Activity
 import android.app.Application
+import android.content.ContentValues
+import android.content.Context
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Typeface
+import android.graphics.pdf.PdfDocument
 import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
+import android.text.TextPaint
+import android.widget.Toast
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.glance.appwidget.updateAll
@@ -324,6 +335,174 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } catch (e: Exception) {
             e.printStackTrace()
             return@withContext null
+        }
+    }
+
+    // Make sure your wrapper class structure matches this
+    data class PdfExportData(
+        val listName: String,
+        val content: String,
+        val ranges: List<TransformationRanges>,
+        val imagePaths: List<String>
+    )
+
+    fun exportRichPdf(context: Context, data: PdfExportData) {
+        viewModelScope.launch {
+            val success = generateRichPdf(context, data)
+            if (success) {
+                Toast.makeText(context, "${data.listName}_Export.pdf saved to Downloads!", Toast.LENGTH_LONG).show()
+            } else {
+                Toast.makeText(context, "Failed to export PDF", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    suspend fun generateRichPdf(context: Context, data: PdfExportData): Boolean = withContext(Dispatchers.IO) {
+        val pdfDocument = PdfDocument()
+        val pageInfo = PdfDocument.PageInfo.Builder(595, 842, 1).create()
+        var page = pdfDocument.startPage(pageInfo)
+        var canvas: Canvas = page.canvas
+
+        var yPosition = 60f
+        val marginX = 40f
+
+        // Base Configuration Paints
+        val titlePaint = Paint().apply {
+            textSize = 24f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            color = android.graphics.Color.BLACK
+        }
+
+        val bigHeaderPaint = Paint().apply {
+            textSize = 20f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            color = android.graphics.Color.BLACK
+        }
+
+        val biggerHeaderPaint = Paint().apply {
+            textSize = 24f
+            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
+            color = android.graphics.Color.BLACK
+        }
+
+        val textPaint = TextPaint().apply {
+            textSize = 14f
+            color = android.graphics.Color.BLACK
+        }
+
+        // Draw Title
+        canvas.drawText(data.listName.ifBlank { "Untitled List" }, marginX, yPosition, titlePaint)
+        yPosition += 50f
+
+        // Draw Images Header Grid
+        if (data.imagePaths.isNotEmpty()) {
+            var xPosition = marginX
+            val imageSize = 100f
+            val spacing = 10f
+
+            data.imagePaths.forEach { path ->
+                try {
+                    val bitmap = BitmapFactory.decodeFile(path)
+                    if (bitmap != null) {
+                        if (xPosition + imageSize > 555f) {
+                            xPosition = marginX
+                            yPosition += imageSize + spacing
+                        }
+                        val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(
+                            bitmap, imageSize.toInt(), imageSize.toInt(), true
+                        )
+                        canvas.drawBitmap(scaledBitmap, xPosition, yPosition, null)
+                        xPosition += imageSize + spacing
+                    }
+                } catch (e: Exception) {
+                    e.printStackTrace()
+                }
+            }
+            yPosition += imageSize + 30f
+        }
+
+        // Draw Content Text with Range Mapping Styles
+        val lines = data.content.split("\n")
+        var globalIndexOffset = 0
+
+        lines.forEach { line ->
+            if (yPosition > 800f) {
+                pdfDocument.finishPage(page)
+                page = pdfDocument.startPage(pageInfo)
+                canvas = page.canvas
+                yPosition = 50f
+            }
+
+            val lineStartPos = globalIndexOffset
+            val lineEndPos = globalIndexOffset + line.length
+
+            val isBigHeader = data.ranges.any { it.type.contains("bigHeader") && it.start <= lineStartPos && it.end >= lineEndPos }
+            val isBiggerHeader = data.ranges.any { it.type.contains("biggerHeader") && it.start <= lineStartPos && it.end >= lineEndPos }
+
+            if (isBiggerHeader) {
+                canvas.drawText(line, marginX, yPosition, biggerHeaderPaint)
+                yPosition += 32f
+            } else if (isBigHeader) {
+                canvas.drawText(line, marginX, yPosition, bigHeaderPaint)
+                yPosition += 28f
+            } else {
+                var currentX = marginX
+
+                line.forEachIndexed { localIndex, character ->
+                    val absoluteStringPos = globalIndexOffset + localIndex
+
+                    val isBold = data.ranges.any { it.type.contains("bold") && absoluteStringPos >= it.start && absoluteStringPos < it.end }
+                    val isItalic = data.ranges.any { it.type.contains("italic") && absoluteStringPos >= it.start && absoluteStringPos < it.end }
+                    val isUnderline = data.ranges.any { it.type.contains("underline") && absoluteStringPos >= it.start && absoluteStringPos < it.end }
+
+                    val styleFlag = when {
+                        isBold && isItalic -> Typeface.BOLD_ITALIC
+                        isBold -> Typeface.BOLD
+                        isItalic -> Typeface.ITALIC
+                        else -> Typeface.NORMAL
+                    }
+
+                    textPaint.typeface = Typeface.create(Typeface.DEFAULT, styleFlag)
+                    textPaint.isUnderlineText = isUnderline
+
+                    val charStr = character.toString()
+                    canvas.drawText(charStr, currentX, yPosition, textPaint)
+
+                    currentX += textPaint.measureText(charStr)
+                }
+                yPosition += 24f
+            }
+
+            globalIndexOffset += line.length + 1
+        }
+
+        pdfDocument.finishPage(page)
+
+        // MediaStore Export System Writer
+        val displayName = "${data.listName.replace(" ", "_")}_Export.pdf"
+        val contentValues = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)
+            put(MediaStore.MediaColumns.MIME_TYPE, "application/pdf")
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+            }
+        }
+
+        val resolver = context.contentResolver
+        val uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, contentValues)
+
+        return@withContext if (uri != null) {
+            try {
+                resolver.openOutputStream(uri)?.use { pdfDocument.writeTo(it) }
+                pdfDocument.close()
+                true
+            } catch (e: Exception) {
+                pdfDocument.close()
+                false
+            }
+        } else {
+            pdfDocument.close()
+            false
         }
     }
 

@@ -1,10 +1,8 @@
 package com.kevinnesbitt.simple_ist
 
 import android.app.Activity
-import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Bundle
-import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -28,7 +26,6 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -44,6 +41,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
@@ -53,6 +54,9 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonColors
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
@@ -75,7 +79,6 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
@@ -1493,6 +1496,31 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         }
     }
 
+    // Automatically updates the toggle buttons to reflect formatting at the current cursor position
+    LaunchedEffect(listText.selection) {
+        val cursor = listText.selection.start
+
+        // Reset selections to false by default for whenever you enter unstyled text spaces
+        boldLetters = false
+        italicLetters = false
+        underlineLetters = false
+        bigHeader = false
+        biggerHeader = false
+
+        // Look at all ranges currently covering this specific text index
+        val activeRangesAtCursor = localRanges.filter { range ->
+            cursor >= range.start && cursor <= range.end
+        }
+
+        activeRangesAtCursor.forEach { range ->
+            if (range.type.contains("bold")) boldLetters = true
+            if (range.type.contains("italic")) italicLetters = true
+            if (range.type.contains("underline")) underlineLetters = true
+            if (range.type.contains("bigHeader")) bigHeader = true
+            if (range.type.contains("biggerHeader")) biggerHeader = true
+        }
+    }
+
     val pickMediaLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
@@ -1515,6 +1543,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
     }
 
     var promptPremiumPDF by remember {
+        mutableStateOf(false)
+    }
+
+    var confirmPdfDownload by remember {
         mutableStateOf(false)
     }
 
@@ -1717,22 +1749,42 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 if (biggerHeader) decorType += "biggerHeader"
 
                                 if (lengthDifference > 0) {
-                                    // Find the index where the typing actually started
                                     val typedIndex = maxOf(0, cursorPos - lengthDifference)
 
-                                    // 1. Look for an existing formatting range that the cursor is currently inside of
-                                    val targetRangeIndex = localRanges.indexOfFirst { range ->
-                                        typedIndex >= range.start && typedIndex <= range.end
+                                    // 1. ✨ THE CRITICAL CHANGE: Only include the end boundary if it matches our active toggled style
+                                    // Look inside your existing onValueChange block under lengthDifference > 0:
+                                    val envelopingRanges = localRanges.filter { range ->
+                                        // Check if the individual style type is currently part of the active decorType composition string
+                                        if (decorType.contains(range.type) && range.type.isNotEmpty()) {
+                                            typedIndex > range.start && typedIndex <= range.end
+                                        } else {
+                                            typedIndex > range.start && typedIndex < range.end
+                                        }
                                     }
 
-                                    if (targetRangeIndex != -1 && localRanges[targetRangeIndex].type == decorType) {
-                                        // SCENARIO A: Expand matching style by the actual amount of characters inserted
-                                        val affectedRange = localRanges[targetRangeIndex]
-                                        val updatedRange = affectedRange.copy(end = affectedRange.end + lengthDifference)
-                                        localRanges[targetRangeIndex] = updatedRange
-                                        viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
-                                    } else if (decorType.isNotEmpty()) {
-                                        // SCENARIO B: Create new range spanning the added text length
+                                    // Tracks if we successfully handled expanding a style that matches what we are typing
+                                    var matchingStyleExpanded = false
+
+                                    envelopingRanges.forEach { affectedRange ->
+                                        val index = localRanges.indexOf(affectedRange)
+                                        if (index != -1) {
+                                            if (affectedRange.type == decorType) {
+                                                // SCENARIO A: Expand our active matching decoration style
+                                                val updatedRange = affectedRange.copy(end = affectedRange.end + lengthDifference)
+                                                localRanges[index] = updatedRange
+                                                viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
+                                                matchingStyleExpanded = true
+                                            } else {
+                                                // SCENARIO B: Expand overlapping styles that the cursor is genuinely inside of
+                                                val updatedRange = affectedRange.copy(end = affectedRange.end + lengthDifference)
+                                                localRanges[index] = updatedRange
+                                                viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
+                                            }
+                                        }
+                                    }
+
+                                    // SCENARIO C: If we are typing a style, but no existing range of that type covered this cursor spot
+                                    if (!matchingStyleExpanded && decorType.isNotEmpty()) {
                                         val newRange = HomeViewModel.TransformationRanges(id = 0, listId, decorType, typedIndex, typedIndex + lengthDifference)
                                         localRanges.add(newRange)
 
@@ -1744,47 +1796,69 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                         }
                                     }
 
-                                    // Shift ALL formatting ranges downstream by the real length difference
+                                    // 2. Shift ALL completely downstream ranges that start AFTER or AT the cursor position
                                     for (i in localRanges.indices) {
                                         val range = localRanges[i]
-                                        if (range.start >= typedIndex && i != targetRangeIndex && range.id != 0) {
+
+                                        // Skip ranges we already handled or expanded above to prevent double-shifting
+                                        if (envelopingRanges.contains(range)) continue
+
+                                        if (range.start >= typedIndex && range.id != 0) {
                                             val shiftedRange = range.copy(start = range.start + lengthDifference, end = range.end + lengthDifference)
                                             localRanges[i] = shiftedRange
                                             viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
                                         }
                                     }
-
                                 } else if (lengthDifference < 0) {
-                                    val absoluteDiff = kotlin.math.abs(lengthDifference)
-                                    val deletedIndex = cursorPos
+                                    // Since characters were removed, lengthDifference is negative (e.g., -1).
+                                    // We get the absolute value to know exactly how many characters were lost.
+                                    val deletedCount = -lengthDifference
+                                    val deletionIndex = cursorPos // The cursor sits exactly where the characters were removed
 
-                                    // Find the range containing the deleted chunk
-                                    val targetRangeIndex = localRanges.indexOfFirst { range ->
-                                        deletedIndex >= range.start && deletedIndex < range.end
+                                    // 1. Find all ranges that the deletion happened INSIDE of
+                                    val envelopingRanges = localRanges.filter { range ->
+                                        deletionIndex >= range.start && deletionIndex < range.end
                                     }
 
-                                    if (targetRangeIndex != -1) {
-                                        val affectedRange = localRanges[targetRangeIndex]
+                                    envelopingRanges.forEach { affectedRange ->
+                                        val index = localRanges.indexOf(affectedRange)
+                                        if (index != -1) {
+                                            val updatedRange = affectedRange.copy(end = affectedRange.end - deletedCount)
 
-                                        // If the chunk removal leaves the range empty or inverted, kill it
-                                        if (affectedRange.start >= affectedRange.end - absoluteDiff) {
-                                            localRanges.removeAt(targetRangeIndex)
-                                            viewModel.deleteTransformationRange(affectedRange.id)
-                                        } else {
-                                            // Shrink the boundary down cleanly
-                                            val updatedRange = affectedRange.copy(end = affectedRange.end - absoluteDiff)
-                                            localRanges[targetRangeIndex] = updatedRange
-                                            viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
+                                            // If the range has been shrunk down to nothing, mark it for deletion
+                                            if (updatedRange.end <= updatedRange.start) {
+                                                localRanges.removeAt(index)
+                                                viewModel.deleteTransformationRange(affectedRange.id) // Call your DB deletion method
+                                            } else {
+                                                localRanges[index] = updatedRange
+                                                viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
+                                            }
                                         }
                                     }
 
-                                    // Pull downstream formatting ranges backward by the exact size of the deleted chunk
-                                    for (i in localRanges.indices) {
-                                        val range = localRanges[i]
-                                        if (range.start > deletedIndex) {
-                                            val shiftedRange = range.copy(start = range.start - absoluteDiff, end = range.end - absoluteDiff)
-                                            localRanges[i] = shiftedRange
-                                            viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
+                                    // 2. Shift all completely downstream ranges backward (leftward)
+                                    // We use a safe backwards loop or filter to prevent modifying indices while iterating
+                                    val remainingRanges = localRanges.toList()
+                                    remainingRanges.forEach { range ->
+                                        // Skip ranges we already processed as enveloping ranges
+                                        if (envelopingRanges.contains(range)) return@forEach
+
+                                        if (range.start > deletionIndex && range.id != 0) {
+                                            val index = localRanges.indexOf(range)
+                                            if (index != -1) {
+                                                val shiftedRange = range.copy(
+                                                    start = maxOf(0, range.start - deletedCount),
+                                                    end = maxOf(0, range.end - deletedCount)
+                                                )
+
+                                                if (shiftedRange.end <= shiftedRange.start) {
+                                                    localRanges.removeAt(index)
+                                                    viewModel.deleteTransformationRange(range.id)
+                                                } else {
+                                                    localRanges[index] = shiftedRange
+                                                    viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
+                                                }
+                                            }
                                         }
                                     }
                                 }
@@ -1961,7 +2035,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             )
                         }
 
-                        Button(
+                        IconButton(
                             modifier = Modifier.size(55.dp, 55.dp),
                             onClick = {
                                 if (isPremium) {
@@ -1972,42 +2046,44 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                     promptPremiumPhotoInsert = true
                                 }
                             },
-                            colors = ButtonColors(
-                                containerColor = if (!biggerHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                            colors = IconButtonColors(
+                                containerColor = Color(backgroundColor),
                                 contentColor = mainTextColor,
                                 disabledContentColor = mainTextColor,
-                                disabledContainerColor = if (!biggerHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                                disabledContainerColor = Color(backgroundColor)
                             ),
                             shape = CircleShape
                         ) {
-                            Text(
-                                text = "\uD83D\uDDBC",
-                                fontSize = 23.sp,
-                                textAlign = TextAlign.Center
+                            Icon(
+                                imageVector = Icons.Default.Image, // ✨ Matches your document file image asset
+                                contentDescription = "Export PDF",
+                                modifier = Modifier.size(23.dp),
+                                tint = mainTextColor // Automatically changes to your theme's font color state
                             )
                         }
 
-                        Button(
+                        IconButton(
                             modifier = Modifier.size(55.dp, 55.dp),
                             onClick = {
                                 if (isPremium) {
-
+                                    confirmPdfDownload = true
                                 } else {
                                     promptPremiumPDF = true
                                 }
                             },
-                            colors = ButtonColors(
-                                containerColor = if (!biggerHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                            colors = IconButtonColors(
+                                containerColor = Color(backgroundColor),
                                 contentColor = mainTextColor,
                                 disabledContentColor = mainTextColor,
-                                disabledContainerColor = if (!biggerHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                                disabledContainerColor = Color(backgroundColor)
                             ),
                             shape = CircleShape
                         ) {
-                            Text(
-                                text = "⭳",
-                                fontSize = 23.sp,
-                                textAlign = TextAlign.Center
+                            Icon(
+                                imageVector = Icons.Default.FileDownload, // ✨ Matches your document file image asset
+                                contentDescription = "Export PDF",
+                                modifier = Modifier.size(23.dp),
+                                tint = mainTextColor // Automatically changes to your theme's font color state
                             )
                         }
                     }
@@ -2068,6 +2144,104 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center
                                 )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // prompt premium for PDF download
+            if (confirmPdfDownload) {
+                Dialog(
+                    onDismissRequest = { confirmPdfDownload = false }
+                ) {
+                    Surface(
+                        color = Color.White,
+                        modifier = Modifier.size(350.dp, 200.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        border = BorderStroke(2.dp, Color.Gray)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Download '$listName' as PDF?",
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(7.dp),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = "File will be put into your device's downloads folder.",
+                                fontSize = 13.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = { confirmPdfDownload = false },
+                                    colors = ButtonColors(
+                                        contentColor = Color.Black,
+                                        containerColor = Color.LightGray,
+                                        disabledContentColor = Color.Black,
+                                        disabledContainerColor = Color.LightGray
+                                    ),
+                                    modifier = Modifier.size(width = 137.dp, height = 50.dp)
+                                ) {
+                                    Text(
+                                        text = "Cancel",
+                                        fontSize = 17.sp,
+                                        modifier = Modifier
+                                            .padding(4.dp),
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+
+                                Button(
+                                    onClick = {
+                                        // Collect everything needed into a clean data container payload package
+                                        val exportPayload = HomeViewModel.PdfExportData(
+                                            listName = listName,
+                                            content = listText.text,
+                                            ranges = localRanges, // Your state list holding active formatting style indexes
+                                            imagePaths = imagePaths // Your string state list holding the raw photo locations
+                                        )
+
+                                        viewModel.exportRichPdf(context = context, data = exportPayload)
+
+                                        confirmPdfDownload = false
+                                    },
+                                    colors = ButtonColors(
+                                        contentColor = Color.Black,
+                                        containerColor = Color.Cyan,
+                                        disabledContentColor = Color.Black,
+                                        disabledContainerColor = Color.Cyan
+                                    ),
+                                    modifier = Modifier.size(width = 137.dp, height = 50.dp)
+                                ) {
+                                    Text(
+                                        text = "Download",
+                                        fontSize = 17.sp,
+                                        modifier = Modifier.padding(4.dp),
+                                        fontWeight = FontWeight.Bold,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
                             }
                         }
                     }
