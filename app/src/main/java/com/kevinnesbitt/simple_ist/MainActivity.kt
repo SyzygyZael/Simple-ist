@@ -1496,28 +1496,35 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         }
     }
 
-    // Automatically updates the toggle buttons to reflect formatting at the current cursor position
+    // 1. Declare this state variable directly above the tracking LaunchedEffect
+    var lastTextAnchor by remember { mutableStateOf(listText.text) }
+
+    // 2. Update the effect block to look like this:
     LaunchedEffect(listText.selection) {
         val cursor = listText.selection.start
 
-        // Reset selections to false by default for whenever you enter unstyled text spaces
-        boldLetters = false
-        italicLetters = false
-        underlineLetters = false
-        bigHeader = false
-        biggerHeader = false
+        // ✨ THE FIX: Only read styles from the document if the text didn't change (Clicking/Arrows)
+        if (listText.text == lastTextAnchor) {
+            boldLetters = false
+            italicLetters = false
+            underlineLetters = false
+            bigHeader = false
+            biggerHeader = false
 
-        // Look at all ranges currently covering this specific text index
-        val activeRangesAtCursor = localRanges.filter { range ->
-            cursor >= range.start && cursor <= range.end
-        }
+            val activeRangesAtCursor = localRanges.filter { range ->
+                cursor >= range.start && cursor <= range.end
+            }
 
-        activeRangesAtCursor.forEach { range ->
-            if (range.type.contains("bold")) boldLetters = true
-            if (range.type.contains("italic")) italicLetters = true
-            if (range.type.contains("underline")) underlineLetters = true
-            if (range.type.contains("bigHeader")) bigHeader = true
-            if (range.type.contains("biggerHeader")) biggerHeader = true
+            activeRangesAtCursor.forEach { range ->
+                if (range.type.contains("bold")) boldLetters = true
+                if (range.type.contains("italic")) italicLetters = true
+                if (range.type.contains("underline")) underlineLetters = true
+                if (range.type.contains("bigHeader")) bigHeader = true
+                if (range.type.contains("biggerHeader")) biggerHeader = true
+            }
+        } else {
+            // Text changed because of typing/deleting! Skip resetting buttons and sync the anchor instead.
+            lastTextAnchor = listText.text
         }
     }
 
@@ -1681,7 +1688,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 loadedImages.forEach { imageData ->
                                     Box(
                                         modifier = Modifier
-                                            .padding(horizontal = 4.dp)
+                                            .padding(horizontal = 4.dp, vertical = 2.dp)
                                             .combinedClickable(
                                                 onClick = { },
                                                 onLongClick = { expandedImageId = imageData.id }
@@ -1744,9 +1751,11 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                     val typedIndex = maxOf(0, cursorPos - lengthDifference)
                                     val expandedRangeIds = mutableSetOf<Int>()
 
-                                    // A. LOOP THROUGH ALL CURRENT RANGES AND EXPAND THEM IF THE BUTTON IS ALIVE
-                                    for (i in localRanges.indices) {
-                                        val range = localRanges[i]
+                                    // Make a snapshot copy to safely read while modifying the main list
+                                    val currentRangesSnapshot = localRanges.toList()
+
+                                    currentRangesSnapshot.forEach { range ->
+                                        if (range.id == 0) return@forEach // Skip temporary assignments
 
                                         // Map the specific range string type to its matching state toggle button
                                         val isButtonActive = when (range.type) {
@@ -1758,20 +1767,72 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                             else -> false
                                         }
 
-                                        // CRITICAL RULE: Expand if the button is on and the cursor is touching/at the boundary,
-                                        // OR if the cursor is strictly inside the middle of a word (to prevent trailing letters from breaking format)
-                                        val shouldExpand = (isButtonActive && typedIndex >= range.start && typedIndex <= range.end) ||
-                                                (typedIndex > range.start && typedIndex < range.end)
+                                        if (typedIndex > range.start && typedIndex < range.end) {
+                                            // CASE A: Cursor is strictly INSIDE the range
+                                            if (isButtonActive) {
+                                                // Button is ON -> Expand the existing range forward
+                                                val index = localRanges.indexOfFirst { it.id == range.id }
+                                                if (index != -1) {
+                                                    val updated = range.copy(end = range.end + lengthDifference)
+                                                    localRanges[index] = updated
+                                                    viewModel.updateRange(range.id, updated.start, updated.end)
+                                                    expandedRangeIds.add(range.id)
+                                                }
+                                            } else {
+                                                // Button is OFF -> ✨ SPLIT THE RANGE into a left and right half!
+                                                val index = localRanges.indexOfFirst { it.id == range.id }
+                                                if (index != -1) {
+                                                    // Left Half: Capped right at the cursor insertion index
+                                                    val leftRange = range.copy(end = typedIndex)
+                                                    localRanges[index] = leftRange
+                                                    viewModel.updateRange(range.id, leftRange.start, leftRange.end)
 
-                                        if (shouldExpand) {
-                                            val updatedRange = range.copy(end = range.end + lengthDifference)
-                                            localRanges[i] = updatedRange
-                                            viewModel.updateRange(range.id, updatedRange.start, updatedRange.end)
-                                            expandedRangeIds.add(range.id)
+                                                    // Right Half: Shifted forward past our newly typed plain character
+                                                    val rightStart = typedIndex + lengthDifference
+                                                    val rightEnd = range.end + lengthDifference
+
+                                                    viewModel.addTransformationRange(listId, range.type, rightStart, rightEnd) { realId ->
+                                                        val newRightRange = HomeViewModel.TransformationRanges(id = realId, listId, range.type, rightStart, rightEnd)
+                                                        localRanges.add(newRightRange)
+                                                    }
+                                                }
+                                            }
+                                        } else if (typedIndex == range.end) {
+                                            // CASE B: Cursor is exactly at the trailing edge of the range
+                                            if (isButtonActive) {
+                                                val index = localRanges.indexOfFirst { it.id == range.id }
+                                                if (index != -1) {
+                                                    val updated = range.copy(end = range.end + lengthDifference)
+                                                    localRanges[index] = updated
+                                                    viewModel.updateRange(range.id, updated.start, updated.end)
+                                                    expandedRangeIds.add(range.id)
+                                                }
+                                            }
+                                            // If the button is inactive, we do nothing. The text automatically prints outside the style bounds.
+                                        } else if (range.start >= typedIndex) {
+                                            // CASE C: Range sits entirely downstream from the cursor
+                                            if (range.start == typedIndex && isButtonActive) {
+                                                // Cursor is at the leading edge and button is ON -> Swallow character into range
+                                                val index = localRanges.indexOfFirst { it.id == range.id }
+                                                if (index != -1) {
+                                                    val updated = range.copy(end = range.end + lengthDifference)
+                                                    localRanges[index] = updated
+                                                    viewModel.updateRange(range.id, updated.start, updated.end)
+                                                    expandedRangeIds.add(range.id)
+                                                }
+                                            } else {
+                                                // Move downstream ranges cleanly forward to adjust for character offset shifting
+                                                val index = localRanges.indexOfFirst { it.id == range.id }
+                                                if (index != -1) {
+                                                    val shifted = range.copy(start = range.start + lengthDifference, end = range.end + lengthDifference)
+                                                    localRanges[index] = shifted
+                                                    viewModel.updateRange(range.id, shifted.start, shifted.end)
+                                                }
+                                            }
                                         }
                                     }
 
-                                    // B. CHECK ACTIVE BUTTONS: IF AN ACTIVE STYLE WAS NOT EXPANDED above, START A NEW LAYER
+                                    // D. CHECK ACTIVE BUTTONS: IF AN ACTIVE STYLE WAS NOT EXPANDED ABOVE, INJECT A NEW LAYER
                                     val activeStyles = mutableListOf<String>()
                                     if (boldLetters) activeStyles.add("bold")
                                     if (italicLetters) activeStyles.add("italic")
@@ -1792,19 +1853,6 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                                     localRanges[index] = localRanges[index].copy(id = realId)
                                                 }
                                             }
-                                        }
-                                    }
-
-                                    // C. SHIFT DOWNSTREAM RANGES CLEANLY FORWARD
-                                    for (i in localRanges.indices) {
-                                        val range = localRanges[i]
-                                        // Skip ranges we just handled or newly initialized to avoid double-shifting offsets
-                                        if (expandedRangeIds.contains(range.id) || range.id == 0) continue
-
-                                        if (range.start >= typedIndex) {
-                                            val shiftedRange = range.copy(start = range.start + lengthDifference, end = range.end + lengthDifference)
-                                            localRanges[i] = shiftedRange
-                                            viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
                                         }
                                     }
                                 }
