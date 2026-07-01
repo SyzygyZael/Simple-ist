@@ -1728,7 +1728,6 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 
                                 if (isBulletAddition) {
                                     currentText += "    • "
-                                    // Push the selection cursor past the generated bullet point
                                     selectionStart += 6
                                     selectionEnd += 6
                                 } else if (isBulletDeletion) {
@@ -1741,81 +1740,79 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 val lengthDifference = currentText.length - oldText.length
                                 val cursorPos = selectionStart
 
-                                var decorType = ""
-                                if (boldLetters) decorType += "bold"
-                                if (italicLetters) decorType += "italic"
-                                if (underlineLetters) decorType += "underline"
-                                if (bigHeader) decorType += "bigHeader"
-                                if (biggerHeader) decorType += "biggerHeader"
-
                                 if (lengthDifference > 0) {
                                     val typedIndex = maxOf(0, cursorPos - lengthDifference)
+                                    val expandedRangeIds = mutableSetOf<Int>()
 
-                                    // 1. ✨ THE CRITICAL CHANGE: Only include the end boundary if it matches our active toggled style
-                                    // Look inside your existing onValueChange block under lengthDifference > 0:
-                                    val envelopingRanges = localRanges.filter { range ->
-                                        // Check if the individual style type is currently part of the active decorType composition string
-                                        if (decorType.contains(range.type) && range.type.isNotEmpty()) {
-                                            typedIndex > range.start && typedIndex <= range.end
-                                        } else {
-                                            typedIndex > range.start && typedIndex < range.end
-                                        }
-                                    }
-
-                                    // Tracks if we successfully handled expanding a style that matches what we are typing
-                                    var matchingStyleExpanded = false
-
-                                    envelopingRanges.forEach { affectedRange ->
-                                        val index = localRanges.indexOf(affectedRange)
-                                        if (index != -1) {
-                                            if (affectedRange.type == decorType) {
-                                                // SCENARIO A: Expand our active matching decoration style
-                                                val updatedRange = affectedRange.copy(end = affectedRange.end + lengthDifference)
-                                                localRanges[index] = updatedRange
-                                                viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
-                                                matchingStyleExpanded = true
-                                            } else {
-                                                // SCENARIO B: Expand overlapping styles that the cursor is genuinely inside of
-                                                val updatedRange = affectedRange.copy(end = affectedRange.end + lengthDifference)
-                                                localRanges[index] = updatedRange
-                                                viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
-                                            }
-                                        }
-                                    }
-
-                                    // SCENARIO C: If we are typing a style, but no existing range of that type covered this cursor spot
-                                    if (!matchingStyleExpanded && decorType.isNotEmpty()) {
-                                        val newRange = HomeViewModel.TransformationRanges(id = 0, listId, decorType, typedIndex, typedIndex + lengthDifference)
-                                        localRanges.add(newRange)
-
-                                        viewModel.addTransformationRange(listId, decorType, typedIndex, typedIndex + lengthDifference) { realId ->
-                                            val index = localRanges.indexOfFirst { it.id == 0 && it.start == typedIndex }
-                                            if (index != -1) {
-                                                localRanges[index] = localRanges[index].copy(id = realId)
-                                            }
-                                        }
-                                    }
-
-                                    // 2. Shift ALL completely downstream ranges that start AFTER or AT the cursor position
+                                    // A. LOOP THROUGH ALL CURRENT RANGES AND EXPAND THEM IF THE BUTTON IS ALIVE
                                     for (i in localRanges.indices) {
                                         val range = localRanges[i]
 
-                                        // Skip ranges we already handled or expanded above to prevent double-shifting
-                                        if (envelopingRanges.contains(range)) continue
+                                        // Map the specific range string type to its matching state toggle button
+                                        val isButtonActive = when (range.type) {
+                                            "bold" -> boldLetters
+                                            "italic" -> italicLetters
+                                            "underline" -> underlineLetters
+                                            "bigHeader" -> bigHeader
+                                            "biggerHeader" -> biggerHeader
+                                            else -> false
+                                        }
 
-                                        if (range.start >= typedIndex && range.id != 0) {
+                                        // CRITICAL RULE: Expand if the button is on and the cursor is touching/at the boundary,
+                                        // OR if the cursor is strictly inside the middle of a word (to prevent trailing letters from breaking format)
+                                        val shouldExpand = (isButtonActive && typedIndex >= range.start && typedIndex <= range.end) ||
+                                                (typedIndex > range.start && typedIndex < range.end)
+
+                                        if (shouldExpand) {
+                                            val updatedRange = range.copy(end = range.end + lengthDifference)
+                                            localRanges[i] = updatedRange
+                                            viewModel.updateRange(range.id, updatedRange.start, updatedRange.end)
+                                            expandedRangeIds.add(range.id)
+                                        }
+                                    }
+
+                                    // B. CHECK ACTIVE BUTTONS: IF AN ACTIVE STYLE WAS NOT EXPANDED above, START A NEW LAYER
+                                    val activeStyles = mutableListOf<String>()
+                                    if (boldLetters) activeStyles.add("bold")
+                                    if (italicLetters) activeStyles.add("italic")
+                                    if (underlineLetters) activeStyles.add("underline")
+                                    if (bigHeader) activeStyles.add("bigHeader")
+                                    if (biggerHeader) activeStyles.add("biggerHeader")
+
+                                    activeStyles.forEach { style ->
+                                        val alreadyExpanded = localRanges.any { it.type == style && expandedRangeIds.contains(it.id) }
+
+                                        if (!alreadyExpanded) {
+                                            val newRange = HomeViewModel.TransformationRanges(id = 0, listId, style, typedIndex, typedIndex + lengthDifference)
+                                            localRanges.add(newRange)
+
+                                            viewModel.addTransformationRange(listId, style, typedIndex, typedIndex + lengthDifference) { realId ->
+                                                val index = localRanges.indexOfFirst { it.id == 0 && it.start == typedIndex && it.type == style }
+                                                if (index != -1) {
+                                                    localRanges[index] = localRanges[index].copy(id = realId)
+                                                }
+                                            }
+                                        }
+                                    }
+
+                                    // C. SHIFT DOWNSTREAM RANGES CLEANLY FORWARD
+                                    for (i in localRanges.indices) {
+                                        val range = localRanges[i]
+                                        // Skip ranges we just handled or newly initialized to avoid double-shifting offsets
+                                        if (expandedRangeIds.contains(range.id) || range.id == 0) continue
+
+                                        if (range.start >= typedIndex) {
                                             val shiftedRange = range.copy(start = range.start + lengthDifference, end = range.end + lengthDifference)
                                             localRanges[i] = shiftedRange
                                             viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
                                         }
                                     }
-                                } else if (lengthDifference < 0) {
-                                    // Since characters were removed, lengthDifference is negative (e.g., -1).
-                                    // We get the absolute value to know exactly how many characters were lost.
+                                }
+                                else if (lengthDifference < 0) {
+                                    // Handle text deletions cleanly (Kept exactly identical to your fully working backspace logic)
                                     val deletedCount = -lengthDifference
-                                    val deletionIndex = cursorPos // The cursor sits exactly where the characters were removed
+                                    val deletionIndex = cursorPos
 
-                                    // 1. Find all ranges that the deletion happened INSIDE of
                                     val envelopingRanges = localRanges.filter { range ->
                                         deletionIndex >= range.start && deletionIndex < range.end
                                     }
@@ -1824,11 +1821,9 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                         val index = localRanges.indexOf(affectedRange)
                                         if (index != -1) {
                                             val updatedRange = affectedRange.copy(end = affectedRange.end - deletedCount)
-
-                                            // If the range has been shrunk down to nothing, mark it for deletion
                                             if (updatedRange.end <= updatedRange.start) {
                                                 localRanges.removeAt(index)
-                                                viewModel.deleteTransformationRange(affectedRange.id) // Call your DB deletion method
+                                                viewModel.deleteTransformationRange(affectedRange.id)
                                             } else {
                                                 localRanges[index] = updatedRange
                                                 viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
@@ -1836,11 +1831,8 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                         }
                                     }
 
-                                    // 2. Shift all completely downstream ranges backward (leftward)
-                                    // We use a safe backwards loop or filter to prevent modifying indices while iterating
                                     val remainingRanges = localRanges.toList()
                                     remainingRanges.forEach { range ->
-                                        // Skip ranges we already processed as enveloping ranges
                                         if (envelopingRanges.contains(range)) return@forEach
 
                                         if (range.start > deletionIndex && range.id != 0) {
