@@ -2,7 +2,10 @@ package com.kevinnesbitt.simple_ist
 
 import android.app.Activity
 import android.app.Application
+import android.graphics.BitmapFactory
 import android.net.Uri
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.glance.appwidget.updateAll
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -11,6 +14,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -119,7 +123,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addImage(listId: Int, imagePath: String) {
         viewModelScope.launch {
-            dao.insertImagePath(ImageEntity(listId = listId, imagePath = imagePath))
+            dao.insertImagePath(ImageEntity(id = 0, listId = listId, imagePath = imagePath))
             GlanceWidget().updateAll(getApplication())
         }
     }
@@ -171,6 +175,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteItem(listId: Int, itemId: Int) {
         viewModelScope.launch {
             dao.deleteItem(itemId)
+            GlanceWidget().updateAll(getApplication())
+        }
+    }
+
+    fun deleteImage(id: Int) {
+        viewModelScope.launch {
+            dao.deleteImage(id)
             GlanceWidget().updateAll(getApplication())
         }
     }
@@ -249,6 +260,31 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun getImagesForList(listId: Int): StateFlow<List<ImageData>> {
+        return dao.getAllImagePaths(listId)
+            .map { entityList ->
+                entityList.mapNotNull { entity ->
+                    try {
+                        val bitmap = BitmapFactory.decodeFile(entity.imagePath)?.asImageBitmap()
+                        if (bitmap != null) {
+                            // Keep the DB primary key tied to the graphic asset!
+                            ImageData(id = entity.id, bitmap = bitmap)
+                        } else {
+                            null
+                        }
+                    } catch (e: Exception) {
+                        null
+                    }
+                }
+            }
+            .flowOn(Dispatchers.IO)
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(5000),
+                initialValue = emptyList()
+            )
+    }
+
     fun getImagePathsForList(listId: Int): StateFlow<List<String>> {
         return dao.getAllImagePaths(listId)
             .map { entityList ->
@@ -324,5 +360,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
     data class ImagePaths(
         val listId: Int,
         val imagePath: String
+    )
+
+    data class ImageData(
+        val id: Int,
+        val bitmap: ImageBitmap
     )
 }

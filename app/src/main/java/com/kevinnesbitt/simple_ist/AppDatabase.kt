@@ -29,7 +29,8 @@ data class GenericContentEntity(
 
 @Entity(tableName = "images")
 data class ImageEntity(
-    @PrimaryKey(autoGenerate = false) val listId: Int,
+    @PrimaryKey(autoGenerate = true) val id: Int,
+    val listId: Int,
     val imagePath: String
 )
 
@@ -106,6 +107,9 @@ interface GroceryDao {
     @Query("DELETE FROM transformation_ranges WHERE id = :id")
     suspend fun deleteTransformationRange(id: Int)
 
+    @Query("DELETE FROM images WHERE id = :id")
+    suspend fun deleteImage(id: Int)
+
     // UPDATE QUERIES
     @Query("UPDATE grocery_lists SET name = :newName WHERE id = :listId")
     suspend fun updateListName(listId: Int, newName: String)
@@ -164,7 +168,7 @@ interface GroceryDao {
                 TransformationRangesEntity::class,
                 ImageEntity::class
             ],
-        version = 30
+        version = 31
     )
     abstract class AppDatabase : RoomDatabase() {
         abstract fun groceryDao(): GroceryDao

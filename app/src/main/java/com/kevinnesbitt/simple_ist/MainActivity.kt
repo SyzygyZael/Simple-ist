@@ -26,13 +26,16 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -117,11 +120,13 @@ class MainActivity : ComponentActivity() {
         )
         setContent {
             SimpleistTheme {
-
                 val navController = rememberNavController()
                 val viewModel: HomeViewModel = viewModel(
                     factory = ViewModelProvider.AndroidViewModelFactory.getInstance(application)
                 )
+
+                // val isPremium by viewModel.isPremiumUser.collectAsState()
+                val isPremium = true
 
                 val settings by viewModel.settings.collectAsState()
 
@@ -140,11 +145,11 @@ class MainActivity : ComponentActivity() {
                 ) {
 
                     composable("home") {
-                        HomeScreen(navController, viewModel)
+                        HomeScreen(navController, viewModel, isPremium)
                     }
 
                     composable("settings") {
-                        SettingsScreen(navController, viewModel)
+                        SettingsScreen(navController, viewModel, isPremium)
                     }
 
                     composable(
@@ -159,7 +164,7 @@ class MainActivity : ComponentActivity() {
 
                         when (listType) {
                             "grocery" -> GroceryListScreen(listId = listId, navController = navController, viewModel)
-                            "generic" -> GenericListScreen(listId = listId, navController = navController, viewModel)
+                            "generic" -> GenericListScreen(listId = listId, navController = navController, viewModel, isPremium)
                         }
                     }
                 }
@@ -176,10 +181,7 @@ class MainActivity : ComponentActivity() {
 
 @OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
-    // val isPremium by viewModel.isPremiumUser.collectAsState()
-    val isPremium = false
-
+fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium: Boolean) {
     val context = LocalContext.current
     val activity = context as Activity
 
@@ -309,7 +311,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
                     onClick = {
                         if (isPremium) {
                             isChoosingListType = true
-                        } else if (databaseLists.size > 3) {
+                        } else if (databaseLists.size >= 3) {
                             promptPremiumDialogue = true
                         } else {
                             isChoosingListType = true
@@ -340,7 +342,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel) {
         ) {
             HorizontalDivider(thickness = 2.dp, color = mainTextColor)
 
-            // add lists
+            // draw lists
             if (localLists.isNotEmpty()) {
                 LazyColumn(
                     state = lazyListState,
@@ -1383,9 +1385,8 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun GenericListScreen(listId: Int, navController: NavController, viewModel: HomeViewModel) {
-    // val isPremium by viewModel.isPremiumUser.collectAsState()
-    val isPremium = true
+fun GenericListScreen(listId: Int, navController: NavController, viewModel: HomeViewModel, isPremium: Boolean) {
+    val loadedImages by viewModel.getImagesForList(listId).collectAsState()
 
     val context = LocalContext.current
     val activity = context as Activity
@@ -1470,6 +1471,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         mutableStateOf(TextFieldValue(text = "", selection = if (bulletList) TextRange(2) else TextRange.Zero))
     }
 
+    var expandedImageId by remember {
+        mutableStateOf<Int?>(null)
+    }
+
     var isInitialized by remember { mutableStateOf(false) }
 
     LaunchedEffect(content, ranges) {
@@ -1506,6 +1511,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
     }
 
     var promptPremiumPhotoInsert by remember {
+        mutableStateOf(false)
+    }
+
+    var promptPremiumPDF by remember {
         mutableStateOf(false)
     }
 
@@ -1625,31 +1634,54 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                     .fillMaxSize()
             ) {
                 LazyColumn(modifier = Modifier.imePadding()) {
-                    item {
-                        // 2. You now have a clean, standard List<String> to use anywhere!
-                        // For example, to draw all images at the top of your note like Google Keep:
-                        if (imagePaths.isNotEmpty()) {
-                            Row(
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    if (loadedImages.isNotEmpty()) {
+                        item(key = "note_images_header_${listId}") {
+                            FlowRow(
+                                modifier = Modifier
+                                    .sizeIn(
+                                        minWidth = 0.dp,
+                                        minHeight = 0.dp,
+                                        maxWidth = screenWidth - 60.dp,
+                                        maxHeight = screenHeight * 3
+                                    )
+                                    .padding(vertical = 8.dp)
                             ) {
-                                imagePaths.forEach { path ->
-                                    val bitmap = remember(path) {
-                                        BitmapFactory.decodeFile(path)?.asImageBitmap()
-                                    }
-                                    if (bitmap != null) {
+                                loadedImages.forEach { imageData ->
+                                    Box(
+                                        modifier = Modifier
+                                            .padding(horizontal = 4.dp)
+                                            .combinedClickable(
+                                                onClick = { },
+                                                onLongClick = { expandedImageId = imageData.id }
+                                            ),
+                                        contentAlignment = Alignment.TopStart
+                                    ) {
                                         Image(
-                                            bitmap = bitmap,
+                                            bitmap = imageData.bitmap,
                                             contentDescription = "Note Image",
                                             modifier = Modifier
-                                                .size(100.dp)
+                                                .size(120.dp)
                                                 .clip(RoundedCornerShape(8.dp)),
                                             contentScale = ContentScale.Crop
                                         )
+                                        DropdownMenu(
+                                            expanded = imageData.id == expandedImageId,
+                                            onDismissRequest = { expandedImageId = null }
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text(text = "Delete") },
+                                                onClick = {
+                                                    viewModel.deleteImage(imageData.id)
+                                                }
+                                            )
+                                        }
                                     }
                                 }
                             }
                         }
+                    }
 
+                    item(key = "note_text_field_${listId}") {
                         BasicTextField(
                             value = listText,
                             onValueChange = { newText ->
@@ -1954,13 +1986,37 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 textAlign = TextAlign.Center
                             )
                         }
+
+                        Button(
+                            modifier = Modifier.size(55.dp, 55.dp),
+                            onClick = {
+                                if (isPremium) {
+
+                                } else {
+                                    promptPremiumPDF = true
+                                }
+                            },
+                            colors = ButtonColors(
+                                containerColor = if (!biggerHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f),
+                                contentColor = mainTextColor,
+                                disabledContentColor = mainTextColor,
+                                disabledContainerColor = if (!biggerHeader) Color(backgroundColor) else Color.LightGray.copy(0.5f)
+                            ),
+                            shape = CircleShape
+                        ) {
+                            Text(
+                                text = "⭳",
+                                fontSize = 23.sp,
+                                textAlign = TextAlign.Center
+                            )
+                        }
                     }
                 }
             }
 
             // DIALOG BOXES
 
-            // prompt premium for themes
+            // prompt premium for image inserts
             if (promptPremiumPhotoInsert) {
                 Dialog(
                     onDismissRequest = { promptPremiumPhotoInsert = false }
@@ -2017,15 +2073,70 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                     }
                 }
             }
+
+            // prompt premium for PDF download
+            if (promptPremiumPDF) {
+                Dialog(
+                    onDismissRequest = { promptPremiumPDF = false }
+                ) {
+                    Surface(
+                        color = Color.White,
+                        modifier = Modifier.size(350.dp, 200.dp),
+                        shape = RoundedCornerShape(25.dp),
+                        border = BorderStroke(2.dp, Color.Gray)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(4.dp),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = "Get Premium to download your list as a PDF!",
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(7.dp),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = "Enjoy extra features with Premium.",
+                                fontSize = 13.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth(),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Button(
+                                onClick = { viewModel.launchBillingFlow(activity) },
+                                colors = ButtonColors(
+                                    contentColor = Color.Black,
+                                    containerColor = Color.Cyan,
+                                    disabledContentColor = Color.Black,
+                                    disabledContainerColor = Color.Cyan
+                                )
+                            ) {
+                                Text(
+                                    text = "Get Premium!",
+                                    fontSize = 18.sp,
+                                    modifier = Modifier.padding(7.dp),
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
 
 @Composable
-fun SettingsScreen(navController: NavController, viewModel: HomeViewModel) {
-    // val isPremium by viewModel.isPremiumUser.collectAsState()
-    val isPremium = true
-
+fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPremium: Boolean) {
     val context = LocalContext.current
     val activity = context as Activity
 
