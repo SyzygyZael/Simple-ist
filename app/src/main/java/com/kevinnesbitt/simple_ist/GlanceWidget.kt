@@ -111,21 +111,23 @@ fun WidgetContent(viewModel: HomeViewModel) {
             modifier = GlanceModifier
                 .fillMaxWidth()
                 .background(color = Color(settings.barColor)),
-            horizontalAlignment = Alignment.CenterHorizontally,
+            horizontalAlignment = Alignment.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Text(
-                text = groceryListObj?.name ?: "",
-                style = TextStyle(
-                    fontSize = 20.sp,
-                    color = ColorProvider(day = barTextColor, night = barTextColor),
-                    fontWeight = androidx.glance.text.FontWeight.Bold
-                )
-            )
+            // Text(
+            //     text = groceryListObj?.name ?: "",
+            //     style = TextStyle(
+            //         fontSize = 20.sp,
+            //         color = ColorProvider(day = barTextColor, night = barTextColor),
+            //         fontWeight = androidx.glance.text.FontWeight.Bold
+            //     )
+            // )
 
             Text(
                 text = "     ➜]",
-                modifier = GlanceModifier.clickable(actionStartActivity<MainActivity>()),
+                modifier = GlanceModifier
+                    .padding(4.dp)
+                    .clickable(actionStartActivity<MainActivity>()),
                 style = TextStyle(
                     fontSize = 20.sp,
                     color = ColorProvider(day = barTextColor, night = barTextColor),
