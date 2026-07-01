@@ -366,7 +366,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         var yPosition = 60f
         val marginX = 40f
 
-        // Base Configuration Paints
         val titlePaint = Paint().apply {
             textSize = 24f
             typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
@@ -390,11 +389,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             color = android.graphics.Color.BLACK
         }
 
-        // Draw Title
         canvas.drawText(data.listName.ifBlank { "Untitled List" }, marginX, yPosition, titlePaint)
         yPosition += 50f
 
-        // Draw Images Header Grid
         if (data.imagePaths.isNotEmpty()) {
             var xPosition = marginX
             val imageSize = 100f
@@ -421,7 +418,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             yPosition += imageSize + 30f
         }
 
-        // Draw Content Text with Range Mapping Styles
         val lines = data.content.split("\n")
         var globalIndexOffset = 0
 
@@ -436,8 +432,25 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             val lineStartPos = globalIndexOffset
             val lineEndPos = globalIndexOffset + line.length
 
-            val isBigHeader = data.ranges.any { it.type.contains("bigHeader") && it.start <= lineStartPos && it.end >= lineEndPos }
-            val isBiggerHeader = data.ranges.any { it.type.contains("biggerHeader") && it.start <= lineStartPos && it.end >= lineEndPos }
+            // Overlap boundary checks implemented here to properly catch user text edits
+            val isBigHeader = data.ranges.any { range ->
+                range.type.contains("bigHeader") && (
+                        if (lineStartPos == lineEndPos) {
+                            range.start <= lineStartPos && range.end >= lineEndPos
+                        } else {
+                            range.start < lineEndPos && range.end > lineStartPos
+                        }
+                        )
+            }
+            val isBiggerHeader = data.ranges.any { range ->
+                range.type.contains("biggerHeader") && (
+                        if (lineStartPos == lineEndPos) {
+                            range.start <= lineStartPos && range.end >= lineEndPos
+                        } else {
+                            range.start < lineEndPos && range.end > lineStartPos
+                        }
+                        )
+            }
 
             if (isBiggerHeader) {
                 canvas.drawText(line, marginX, yPosition, biggerHeaderPaint)
@@ -478,7 +491,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
         pdfDocument.finishPage(page)
 
-        // MediaStore Export System Writer
         val displayName = "${data.listName.replace(" ", "_")}_Export.pdf"
         val contentValues = ContentValues().apply {
             put(MediaStore.MediaColumns.DISPLAY_NAME, displayName)

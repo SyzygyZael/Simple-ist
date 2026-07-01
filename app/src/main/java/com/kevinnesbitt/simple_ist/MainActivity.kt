@@ -42,7 +42,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Image
 import androidx.compose.material3.AlertDialog
@@ -173,12 +172,6 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
-    }
-
-    fun addPhotoToContentText(currentContent: String, savedPhotoPath: String): String {
-        // Using a clear delimiter like brackets makes parsing 100% reliable
-        val photoToken = "\n[[image:$savedPhotoPath]]\n"
-        return currentContent + photoToken
     }
 }
 
