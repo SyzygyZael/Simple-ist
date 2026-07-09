@@ -184,7 +184,7 @@ interface GroceryDao {
                         AppDatabase::class.java,
                         "grocery_database"
                     )
-                        .fallbackToDestructiveMigration(true)
+                        .fallbackToDestructiveMigration(false)
                         .build().also { INSTANCE = it }
                 }
             }

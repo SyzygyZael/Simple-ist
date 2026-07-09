@@ -16,8 +16,8 @@ android {
         applicationId = "com.kevinnesbitt.simple_ist"
         minSdk = 29
         targetSdk = 36
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 4
+        versionName = "simple-ist_billing_tester_1.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -27,6 +27,13 @@ android {
             optimization {
                 enable = false
             }
+
+            isMinifyEnabled = true
+            isShrinkResources = true
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt")
+            )
         }
     }
     compileOptions {

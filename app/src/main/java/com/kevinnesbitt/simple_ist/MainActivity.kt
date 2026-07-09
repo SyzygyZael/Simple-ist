@@ -127,8 +127,8 @@ class MainActivity : ComponentActivity() {
                     factory = ViewModelProvider.AndroidViewModelFactory.getInstance(application)
                 )
 
-                // val isPremium by viewModel.isPremiumUser.collectAsState()
-                val isPremium = true
+                val isPremium by viewModel.isPremiumUser.collectAsState()
+                // val isPremium = true
 
                 val settings by viewModel.settings.collectAsState()
 
@@ -903,7 +903,10 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium
                             )
 
                             Button(
-                                onClick = { viewModel.launchBillingFlow(activity) },
+                                onClick = {
+                                    viewModel.launchBillingFlow(activity)
+                                    promptPremiumDialogue = false
+                                },
                                 colors = ButtonColors(
                                     contentColor = Color.Black,
                                     containerColor = Color.Cyan,
@@ -2318,7 +2321,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             )
 
                             Button(
-                                onClick = { viewModel.launchBillingFlow(activity) },
+                                onClick = {
+                                    viewModel.launchBillingFlow(activity)
+                                    promptPremiumPDF = false
+                                },
                                 colors = ButtonColors(
                                     contentColor = Color.Black,
                                     containerColor = Color.Cyan,
@@ -2951,7 +2957,10 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
                             )
 
                             Button(
-                                onClick = { viewModel.launchBillingFlow(activity) },
+                                onClick = {
+                                    viewModel.launchBillingFlow(activity)
+                                    promptPremium = false
+                                },
                                 colors = ButtonColors(
                                     contentColor = Color.Black,
                                     containerColor = Color.Cyan,
