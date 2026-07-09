@@ -48,6 +48,7 @@ import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ElevatedCard
@@ -76,7 +77,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -128,11 +131,11 @@ class MainActivity : ComponentActivity() {
                 )
 
                 val isPremium by viewModel.isPremiumUser.collectAsState()
-                // val isPremium = true
+                // val isPremium = false
 
                 val settings by viewModel.settings.collectAsState()
 
-                LaunchedEffect(settings.barColor) {
+                LaunchedEffect(settings.barColor, settings) {
                     enableEdgeToEdge(
                         statusBarStyle = SystemBarStyle.light(
                             scrim = settings.barColor.toInt(),
@@ -916,6 +919,106 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium
                             ) {
                                 Text(
                                     text = "Get Premium!",
+                                    fontSize = 18.sp,
+                                    modifier = Modifier.padding(7.dp),
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            // accept privacy policy
+            if (settings.acceptedPrivacyPolicy == 0) {
+                Dialog(
+                    onDismissRequest = { }
+                ) {
+                    Surface(
+                        color = Color.White,
+                        modifier = Modifier.size(350.dp, 550.dp),
+                        shape = RoundedCornerShape(25.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .padding(7.dp)
+                                .background(color = Color.White),
+                            verticalArrangement = Arrangement.SpaceEvenly,
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+
+                            Text(
+                                text = "Privacy Policy",
+                                fontSize = 21.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(7.dp),
+                                textAlign = TextAlign.Center
+                            )
+
+                            Text(
+                                text = "By accepting, you certify that you have read and acknowledged our policy on collecting and handling user data.",
+                                fontSize = 15.sp,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                            )
+
+                            HorizontalDivider(thickness = 2.dp, color = Color.Black)
+
+                            LazyColumn(
+                                modifier = Modifier
+                                    .size(width = 350.dp, height = 350.dp)
+                                    .background(color = Color.White)
+                            ) {
+                                item {
+                                    Text(
+                                        text = "Privacy Policy for Simple-ist\n" +
+                                                "Last Updated: July 2026\n\n" +
+                                                "Thank you for choosing Simple-ist! Your privacy is incredibly important. This Privacy Policy outlines how Simple-ist handles your information.\n" +
+                                                "The short version? We don't collect your personal data, and your notes belong strictly to you.\n\n" +
+                                                "1. Information Collection and Use\n" +
+                                                "Simple-ist is designed with a \"privacy-first\" philosophy.\n" +
+                                                "Personal Data: We do not collect, request, or store any personal information (such as your name, email address, phone number, or location).\n" +
+                                                "Your Notes: Any text, lists, or content you type into Simple-ist is processed and stored locally on your device. We do not have access to your notes, and we never transfer them to any external servers.\n\n" +
+                                                "2. Data Storage and Deletion\n" +
+                                                "Because your data is stored locally on your device, you have total control over it:\n" +
+                                                "Deletion: You can delete your notes at any time directly within the app.\n" +
+                                                "Uninstalling: If you uninstall Simple-ist, all notes stored within the app will be permanently deleted from your device. Because we do not keep cloud backups, we cannot recover deleted notes for you.\n\n" +
+                                                "3. Third-Party Services and Payments\n" +
+                                                "We keep things clean and minimal, but we do use Google's official infrastructure to handle in-app transactions safely:\n" +
+                                                "Analytics & Ads: We do not use any third-party tracking, analytics tools, or advertising networks.\n" +
+                                                "Google Play Billing: If you purchase a premium feature or subscription, the transaction is handled entirely and securely by Google Play Billing. Simple-ist never sees or stores your financial details (like credit card numbers or billing addresses).\n\n" +
+                                                "4. Children’s Privacy\n" +
+                                                "Simple-ist is intended for everyone. Because our app does not collect any personal information from any user, we do not knowingly or unknowingly harvest personal data from children.\n\n" +
+                                                "5. Changes to This Privacy Policy\n" +
+                                                "We may update this Privacy Policy from time to time. Any updates will be marked by a change to the \"Last Updated\" date at the top of this page. Since we do not collect your contact details to send notifications, we recommend reviewing this policy via the app store listing occasionally.\n\n" +
+                                                "6. Contact Us\n" +
+                                                "If you have any questions or feedback regarding this Privacy Policy, please feel free to reach out:\n" +
+                                                "Email: kevnes522@gmail.com\n",
+                                        color = Color.Black,
+                                        fontSize = 13.sp
+                                    )
+                                }
+                            }
+
+                            HorizontalDivider(thickness = 2.dp, color = Color.Black)
+
+                            Button(
+                                onClick = {
+                                    viewModel.acceptPrivacyPolicy()
+                                },
+                                colors = ButtonColors(
+                                    contentColor = Color.White,
+                                    containerColor = Color.DarkGray,
+                                    disabledContentColor = Color.White,
+                                    disabledContainerColor = Color.DarkGray
+                                )
+                            ) {
+                                Text(
+                                    text = "Accept",
                                     fontSize = 18.sp,
                                     modifier = Modifier.padding(7.dp),
                                     fontWeight = FontWeight.Bold,
@@ -2350,6 +2453,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 
 @Composable
 fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPremium: Boolean) {
+    val windowInfo = LocalWindowInfo.current
+    val screenWidth = windowInfo.containerDpSize.width
+    val screenHeight = windowInfo.containerDpSize.height
+
     val context = LocalContext.current
     val activity = context as Activity
 
@@ -2473,7 +2580,8 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
             modifier = Modifier
                 .fillMaxSize()
                 .padding(innerPadding)
-                .background(color = Color(backgroundColor))
+                .background(color = Color(backgroundColor)),
+            horizontalAlignment = Alignment.CenterHorizontally
         )  {
             // top bar name and buttons
             Row(modifier = Modifier
@@ -2914,6 +3022,64 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
                                 isChoosingTheme = false
                             }
                         )
+                    }
+                }
+            }
+
+            if (!isPremium) {
+                val strokeGradient = Brush.linearGradient(
+                    colors = listOf(
+                        Color.Black,
+                        Color.Gray
+                    )
+                )
+
+                val backgroundGradient = Brush.linearGradient(
+                    colors = listOf(
+                        Color(0xFF87CEEBL),
+                        Color(0xFF00FFFFL)
+                    )
+                )
+
+                Surface(
+                    border = BorderStroke(2.dp, strokeGradient),
+                    modifier = Modifier
+                        .size(width = screenWidth - 15.dp, height = 125.dp)
+                        .padding(8.dp),
+                    shape = RoundedCornerShape(15.dp)
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(brush = backgroundGradient)
+                    ) {
+                        Text(
+                            text = "Take notes like a pro.",
+                            fontSize = 25.sp,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = Color.Black
+                        )
+                        Text(
+                            text = "Purchase the full app!",
+                            fontSize = 15.sp,
+                            textAlign = TextAlign.Center,
+                            color = Color.DarkGray
+                        )
+
+                        Button(
+                            onClick = {
+                                viewModel.launchBillingFlow(activity)
+                            }
+                        ) {
+                            Text(
+                                text = "Get",
+                                fontSize = 15.sp,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
                     }
                 }
             }

@@ -54,7 +54,8 @@ data class SettingsEntity(
     val backgroundColor: Long = 0xFFFFFFFFL,
     val theme: String = "Default",
     val barColorString: String = "Yellow",
-    val barTextColorString: String = "Black"
+    val barTextColorString: String = "Black",
+    val acceptedPrivacyPolicy: Int = -1
 )
 
 @Dao
@@ -139,6 +140,9 @@ interface GroceryDao {
     @Update
     suspend fun updateItems(items: List<GroceryItemEntity>)
 
+    @Query("UPDATE settings SET acceptedPrivacyPolicy = 1 WHERE settingId = 1")
+    suspend fun acceptPrivacyPolicy()
+
     // OTHER QUERIES
     @Query("SELECT * FROM settings WHERE settingId = 1")
     fun getSettings(): Flow<SettingsEntity>
@@ -168,7 +172,7 @@ interface GroceryDao {
                 TransformationRangesEntity::class,
                 ImageEntity::class
             ],
-        version = 31
+        version = 34
     )
     abstract class AppDatabase : RoomDatabase() {
         abstract fun groceryDao(): GroceryDao

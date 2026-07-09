@@ -48,7 +48,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             val existing = dao.getSettingsOnce()
             if (existing == null) {
-                dao.insertSettings(SettingsEntity())
+                dao.insertSettings(SettingsEntity(acceptedPrivacyPolicy = 0))
             }
         }
     }
@@ -515,6 +515,13 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             pdfDocument.close()
             false
+        }
+    }
+
+    fun acceptPrivacyPolicy() {
+        viewModelScope.launch {
+            dao.acceptPrivacyPolicy()
+            GlanceWidget().updateAll(getApplication())
         }
     }
 
