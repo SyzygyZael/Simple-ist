@@ -3,11 +3,14 @@ package com.kevinnesbitt.simple_ist
 import android.app.Activity
 import android.content.Context
 import com.android.billingclient.api.*
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 class BillingManager(context: Context) {
-
+    private val scope = CoroutineScope(Dispatchers.IO)
     private val _isPremium = MutableStateFlow(false)
     val isPremium: StateFlow<Boolean> = _isPremium
 
@@ -61,6 +64,12 @@ class BillingManager(context: Context) {
                     purchase.products.contains("premium")
         }
         _isPremium.value = hasPremium
+
+        purchases.forEach { purchase ->
+            if (purchase.purchaseState == Purchase.PurchaseState.PURCHASED && !purchase.isAcknowledged) {
+                acknowledgeMyPurchase(purchase)
+            }
+        }
     }
 
     fun launchPurchaseFlow(activity: Activity, productId: String) {
@@ -93,6 +102,22 @@ class BillingManager(context: Context) {
 
                 // 3. This opens up the official Google Play secure checkout window
                 billingClient.launchBillingFlow(activity, billingFlowParams)
+            }
+        }
+    }
+
+    private fun acknowledgeMyPurchase(purchase: Purchase) {
+        val acknowledgePurchaseParams = AcknowledgePurchaseParams.newBuilder()
+            .setPurchaseToken(purchase.purchaseToken)
+            .build()
+
+        scope.launch {
+            billingClient.acknowledgePurchase(acknowledgePurchaseParams) { billingResult ->
+                if (billingResult.responseCode == BillingClient.BillingResponseCode.OK) {
+                    android.util.Log.d("BillingTest", "Purchase instantly acknowledged and finalized successfully!")
+                } else {
+                    android.util.Log.e("BillingTest", "Failed to acknowledge purchase: ${billingResult.debugMessage}")
+                }
             }
         }
     }
