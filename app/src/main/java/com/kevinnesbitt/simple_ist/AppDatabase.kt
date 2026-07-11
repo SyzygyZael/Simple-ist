@@ -162,6 +162,12 @@ interface GroceryDao {
     @Query("SELECT COALESCE(MAX(itemOrder), -1) FROM grocery_items")
     suspend fun getMaxItemOrder(): Int
 
+    @Query("SELECT * FROM grocery_lists WHERE id = :listId LIMIT 1")
+    suspend fun getListByIdOneShot(listId: Int): GroceryListEntity?
+
+    @Query("SELECT * FROM generic_list_content WHERE listId = :listId LIMIT 1")
+    suspend fun getContentByListIdOneShot(listId: Int): GenericContentEntity?
+
     @Database(
         entities =
             [
