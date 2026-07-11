@@ -3,6 +3,7 @@ package com.kevinnesbitt.simple_ist
 import android.app.Activity
 import android.net.Uri
 import android.os.Bundle
+import android.view.textclassifier.TextSelection
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,7 +14,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.Image
@@ -25,15 +28,18 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
@@ -42,8 +48,10 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Image
+import androidx.compose.material.icons.filled.TransitEnterexit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonColors
@@ -79,6 +87,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
@@ -92,14 +101,18 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavController
 import androidx.navigation.NavType
@@ -109,20 +122,41 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.kevinnesbitt.simple_ist.ui.TextVisualTransformation
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.time.delay
 import kotlin.collections.emptyList
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
+import kotlin.time.Duration.Companion.milliseconds
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
-        installSplashScreen()
-        super.onCreate(savedInstanceState)
+        val splashScreen = installSplashScreen()
+
+        var keepSplashScreenOn = true
+
+        splashScreen.setKeepOnScreenCondition {
+            keepSplashScreenOn
+        }
+
+        lifecycleScope.launch {
+            delay(200.milliseconds)
+
+            keepSplashScreenOn = false
+        }
+
         enableEdgeToEdge(
-            statusBarStyle = SystemBarStyle.light(
-                scrim = android.graphics.Color.YELLOW,
-                darkScrim = android.graphics.Color.YELLOW
+            statusBarStyle = SystemBarStyle.auto(
+                lightScrim = android.graphics.Color.TRANSPARENT,
+                darkScrim = android.graphics.Color.TRANSPARENT
+            ),
+            navigationBarStyle = SystemBarStyle.auto(
+                android.graphics.Color.TRANSPARENT,
+                android.graphics.Color.TRANSPARENT
             )
         )
+        super.onCreate(savedInstanceState)
         setContent {
             SimpleistTheme {
                 val navController = rememberNavController()
@@ -183,6 +217,9 @@ class MainActivity : ComponentActivity() {
 fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium: Boolean) {
     val context = LocalContext.current
     val activity = context as Activity
+
+    val windowInfo = LocalWindowInfo.current
+    val screenHeight = windowInfo.containerDpSize.height
 
     val settings by viewModel.settings.collectAsState()
     // 1. Get the source of truth stream from ViewModel
@@ -264,7 +301,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium
     }
 
     var newName by remember {
-        mutableStateOf("")
+        mutableStateOf(TextFieldValue(text = ""))
     }
 
     var tempGroceryListId by remember {
@@ -281,12 +318,14 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium
 
     Scaffold(modifier = Modifier
         .fillMaxSize(),
+        containerColor = Color(backgroundColor),
         bottomBar = {
 
             // set up bottom bar
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
+                    .navigationBarsPadding()
                     .background(color = Color(backgroundColor)),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.Bottom
@@ -345,7 +384,13 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium
             if (localLists.isNotEmpty()) {
                 LazyColumn(
                     state = lazyListState,
-                    modifier = Modifier.imePadding()
+                    modifier = Modifier.imePadding(),
+                    contentPadding = PaddingValues(
+                        top = 8.dp,
+                        start = 8.dp,
+                        end = 8.dp,
+                        bottom = screenHeight - 200.dp // 👈 Adjust this value to allow scrolling further up
+                    )
                 ) {
                     items(localLists, key = { groceryList -> groceryList.id }) { groceryList ->
                         ReorderableItem(reorderableState, key = groceryList.id) { isDragging ->
@@ -428,7 +473,11 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium
                                             )
                                         },
                                         onClick = {
+                                            val listToBeRenamed = databaseLists.find { it.id == groceryList.id }
+                                            val listNameBruh = listToBeRenamed?.name?: ""
+
                                             tempGroceryListId = groceryList.id
+                                            newName = TextFieldValue(text = listNameBruh, selection = TextRange(0, listNameBruh.length))
                                             isChangingListName = true
                                             expandedListId = null
                                         }
@@ -500,7 +549,7 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium
                             TextField(
                                 value = newName,
                                 onValueChange = { text ->
-                                    if (text.length <= 20) {
+                                    if (text.text.length <= 20) {
                                         newName = text
                                     }
                                 },
@@ -509,12 +558,12 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium
                                 ),
                                 keyboardActions = KeyboardActions(
                                     onDone = {
-                                        if (newName.isNotBlank()) {
+                                        if (newName.text.isNotBlank()) {
                                             viewModel.updateListName(
                                                 listId = tempGroceryListId,
-                                                newName = newName
+                                                newName = newName.text
                                             )
-                                            newName = ""
+                                            newName = TextFieldValue(text = "")
                                             lstName = ""
                                             tempGroceryListId = 0
                                             isChangingListName = false
@@ -548,12 +597,12 @@ fun HomeScreen(navController: NavController, viewModel: HomeViewModel, isPremium
 
                                 Button(
                                     onClick = {
-                                        if (newName.isNotBlank()) {
+                                        if (newName.text.isNotBlank()) {
                                             viewModel.updateListName(
                                                 listId = tempGroceryListId,
-                                                newName = newName
+                                                newName = newName.text
                                             )
-                                            newName = ""
+                                            newName = TextFieldValue(text = "")
                                             lstName = ""
                                             tempGroceryListId = 0
                                             isChangingListName = false
@@ -1086,7 +1135,7 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
     }
 
     var newListName by remember {
-        mutableStateOf("  $listName")
+        mutableStateOf(TextFieldValue(text = listName, selection = TextRange(0, listName.length)))
     }
 
     var isChangingListName by remember {
@@ -1162,7 +1211,7 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
                     BasicTextField(
                         value = newListName,
                         onValueChange = { text ->
-                            if (text.length <= 20) {
+                            if (text.text.length <= 20) {
                                 newListName = text
                             } },
                         keyboardOptions = KeyboardOptions(
@@ -1170,8 +1219,9 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
                         ),
                         keyboardActions = KeyboardActions(
                             onDone = {
-                                if (newListName.isNotBlank()) {
-                                    viewModel.updateListName(listId = listId, newName = newListName)
+                                if (newListName.text.isNotBlank()) {
+                                    viewModel.updateListName(listId = listId, newName = newListName.text)
+                                    newListName = TextFieldValue(text = newListName.text, selection = TextRange(0, newListName.text.length))
                                     isChangingListName = false
                                 }
                             }
@@ -1199,8 +1249,6 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier
                             .clickable( onClick = {
-                                viewModel.updateListName(listId = listId, newName = "")
-                                newListName = ""
                                 isChangingListName = true
                             } ),
                         textAlign = TextAlign.Center
@@ -1534,8 +1582,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
     }
 
     var newListName by remember {
-        mutableStateOf("")
+        mutableStateOf(TextFieldValue(text = listName, selection = TextRange(0, listName.length)))
     }
+
+    android.util.Log.d("newListName Value", "newListName = $newListName, listName = $listName")
 
     var showSideBar by remember {
         mutableStateOf(false)
@@ -1571,10 +1621,6 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 
     var listText by remember {
         mutableStateOf(TextFieldValue(text = "", selection = if (bulletList) TextRange(2) else TextRange.Zero))
-    }
-
-    var expandedImageId by remember {
-        mutableStateOf<Int?>(null)
     }
 
     var isInitialized by remember { mutableStateOf(false) }
@@ -1627,6 +1673,10 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         }
     }
 
+    var expandedImageId by remember {
+        mutableStateOf<Int?>(null)
+    }
+
     val pickMediaLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.PickVisualMedia()
     ) { uri: Uri? ->
@@ -1656,6 +1706,22 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
         mutableStateOf(false)
     }
 
+    var showImagePreview by remember {
+        mutableStateOf(false)
+    }
+
+    var tempImageId by remember {
+        mutableIntStateOf(0)
+    }
+
+    var tempImageBitmap: ImageBitmap by remember {
+        mutableStateOf(ImageBitmap(1, 1))
+    }
+
+    var showConfirmImageDeleteDialog by remember {
+        mutableStateOf(false)
+    }
+
     val density = LocalDensity.current
 
     val windowInfo = LocalWindowInfo.current
@@ -1663,384 +1729,26 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
     val screenHeight = windowInfo.containerDpSize.height
 
     Scaffold(
-        modifier = Modifier.fillMaxSize(),
+        modifier = Modifier
+            .fillMaxSize(),
+        containerColor = Color(backgroundColor),
         bottomBar = {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(color = Color(backgroundColor))
-            ) { }
-        }
-    ) { innerPadding ->
-        // screen container setup
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(color = Color(backgroundColor))
-        ) {
-            // top bar list name and buttons
-            Row(modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(settings.barColor)),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
+            AnimatedVisibility(
+                visible = showSideBar,
+                enter = slideInVertically { with(density) { 60.dp.roundToPx() } },
+                exit = slideOutVertically { with(density) { 60.dp.roundToPx() } }
+
             ) {
-                // back button
-                Button(
-                    onClick = {
-                        navController.navigate("home")
-                    },
-                    colors = ButtonColors(
-                        containerColor = Color(settings.barColor),
-                        contentColor = barTextColor,
-                        disabledContentColor = barTextColor,
-                        disabledContainerColor = Color(settings.barColor)
-                    )
+                LazyRow(
+                    modifier = Modifier
+                        // .size(screenWidth, 60.dp)
+                        .fillMaxWidth()
+                        .background(color = Color.Transparent)
+                        .navigationBarsPadding()
+                        .imePadding(),
+                    verticalAlignment = Alignment.CenterVertically
                 ) {
-                    Text(text = "Back", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                }
-
-                // list name changing
-                if (isChangingListName) {
-                    val focusRequester = remember { FocusRequester() }
-
-                    BasicTextField(
-                        value = newListName,
-                        onValueChange = { text ->
-                            if (text.length <= 20) {
-                                newListName = text
-                            } },
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                if (newListName.isNotBlank()) {
-                                    viewModel.updateListName(listId = listId, newName = newListName)
-                                    isChangingListName = false
-                                }
-                            }
-                        ),
-                        textStyle = TextStyle(
-                            fontSize = 26.sp,
-                            color = barTextColor,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        ),
-                        singleLine = true,
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(focusRequester)
-                    )
-
-                    // request keyboard as soon as text field appears
-                    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-
-                } else {
-                    Text(
-                        text = listName,
-                        fontSize = 26.sp,
-                        color = barTextColor,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clickable( onClick = {
-                                viewModel.updateListName(listId = listId, newName = "")
-                                newListName = ""
-                                isChangingListName = true
-                            } ),
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                // menu button
-                Button(
-                    onClick = { showSideBar = !showSideBar },
-                    colors = ButtonColors(
-                        containerColor = Color(settings.barColor),
-                        contentColor = barTextColor,
-                        disabledContentColor = barTextColor,
-                        disabledContainerColor = Color(settings.barColor)
-                    )
-                ) {
-                    Text(text = "☰", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            Row(
-                modifier = Modifier
-                    .fillMaxSize()
-            ) {
-                LazyColumn(modifier = Modifier.imePadding()) {
-                    if (loadedImages.isNotEmpty()) {
-                        item(key = "note_images_header_${listId}") {
-                            FlowRow(
-                                modifier = Modifier
-                                    .sizeIn(
-                                        minWidth = 0.dp,
-                                        minHeight = 0.dp,
-                                        maxWidth = screenWidth - 60.dp,
-                                        maxHeight = screenHeight * 3
-                                    )
-                                    .padding(vertical = 8.dp)
-                            ) {
-                                loadedImages.forEach { imageData ->
-                                    Box(
-                                        modifier = Modifier
-                                            .padding(horizontal = 4.dp, vertical = 2.dp)
-                                            .combinedClickable(
-                                                onClick = { },
-                                                onLongClick = { expandedImageId = imageData.id }
-                                            ),
-                                        contentAlignment = Alignment.TopStart
-                                    ) {
-                                        Image(
-                                            bitmap = imageData.bitmap,
-                                            contentDescription = "Note Image",
-                                            modifier = Modifier
-                                                .size(120.dp)
-                                                .clip(RoundedCornerShape(8.dp)),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                        DropdownMenu(
-                                            expanded = imageData.id == expandedImageId,
-                                            onDismissRequest = { expandedImageId = null }
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text(text = "Delete") },
-                                                onClick = {
-                                                    viewModel.deleteImage(imageData.id)
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-
-                    item(key = "note_text_field_${listId}") {
-                        BasicTextField(
-                            value = listText,
-                            onValueChange = { newText ->
-                                val oldText = listText.text
-                                var currentText = newText.text
-                                var selectionStart = newText.selection.start
-                                var selectionEnd = newText.selection.end
-
-                                // 1. DETERMINE BULLET MODIFICATIONS FIRST
-                                val isBulletAddition = currentText.endsWith("\n") && bulletList
-                                val isBulletDeletion = oldText.endsWith("\n    • ") && currentText.length < oldText.length
-
-                                if (isBulletAddition) {
-                                    currentText += "    • "
-                                    selectionStart += 6
-                                    selectionEnd += 6
-                                } else if (isBulletDeletion) {
-                                    currentText = currentText.dropLast(5)
-                                    selectionStart = maxOf(0, selectionStart - 5)
-                                    selectionEnd = maxOf(0, selectionEnd - 5)
-                                }
-
-                                // 2. NOW EXECUTE RANGE ADJUSTMENTS BASED ON THE TRUE FINAL TEXT LENGTH
-                                val lengthDifference = currentText.length - oldText.length
-                                val cursorPos = selectionStart
-
-                                if (lengthDifference > 0) {
-                                    val typedIndex = maxOf(0, cursorPos - lengthDifference)
-                                    val expandedRangeIds = mutableSetOf<Int>()
-
-                                    // Make a snapshot copy to safely read while modifying the main list
-                                    val currentRangesSnapshot = localRanges.toList()
-
-                                    currentRangesSnapshot.forEach { range ->
-                                        if (range.id == 0) return@forEach // Skip temporary assignments
-
-                                        // Map the specific range string type to its matching state toggle button
-                                        val isButtonActive = when (range.type) {
-                                            "bold" -> boldLetters
-                                            "italic" -> italicLetters
-                                            "underline" -> underlineLetters
-                                            "bigHeader" -> bigHeader
-                                            "biggerHeader" -> biggerHeader
-                                            else -> false
-                                        }
-
-                                        if (typedIndex > range.start && typedIndex < range.end) {
-                                            // CASE A: Cursor is strictly INSIDE the range
-                                            if (isButtonActive) {
-                                                // Button is ON -> Expand the existing range forward
-                                                val index = localRanges.indexOfFirst { it.id == range.id }
-                                                if (index != -1) {
-                                                    val updated = range.copy(end = range.end + lengthDifference)
-                                                    localRanges[index] = updated
-                                                    viewModel.updateRange(range.id, updated.start, updated.end)
-                                                    expandedRangeIds.add(range.id)
-                                                }
-                                            } else {
-                                                // Button is OFF -> ✨ SPLIT THE RANGE into a left and right half!
-                                                val index = localRanges.indexOfFirst { it.id == range.id }
-                                                if (index != -1) {
-                                                    // Left Half: Capped right at the cursor insertion index
-                                                    val leftRange = range.copy(end = typedIndex)
-                                                    localRanges[index] = leftRange
-                                                    viewModel.updateRange(range.id, leftRange.start, leftRange.end)
-
-                                                    // Right Half: Shifted forward past our newly typed plain character
-                                                    val rightStart = typedIndex + lengthDifference
-                                                    val rightEnd = range.end + lengthDifference
-
-                                                    viewModel.addTransformationRange(listId, range.type, rightStart, rightEnd) { realId ->
-                                                        val newRightRange = HomeViewModel.TransformationRanges(id = realId, listId, range.type, rightStart, rightEnd)
-                                                        localRanges.add(newRightRange)
-                                                    }
-                                                }
-                                            }
-                                        } else if (typedIndex == range.end) {
-                                            // CASE B: Cursor is exactly at the trailing edge of the range
-                                            if (isButtonActive) {
-                                                val index = localRanges.indexOfFirst { it.id == range.id }
-                                                if (index != -1) {
-                                                    val updated = range.copy(end = range.end + lengthDifference)
-                                                    localRanges[index] = updated
-                                                    viewModel.updateRange(range.id, updated.start, updated.end)
-                                                    expandedRangeIds.add(range.id)
-                                                }
-                                            }
-                                            // If the button is inactive, we do nothing. The text automatically prints outside the style bounds.
-                                        } else if (range.start >= typedIndex) {
-                                            // CASE C: Range sits entirely downstream from the cursor
-                                            if (range.start == typedIndex && isButtonActive) {
-                                                // Cursor is at the leading edge and button is ON -> Swallow character into range
-                                                val index = localRanges.indexOfFirst { it.id == range.id }
-                                                if (index != -1) {
-                                                    val updated = range.copy(end = range.end + lengthDifference)
-                                                    localRanges[index] = updated
-                                                    viewModel.updateRange(range.id, updated.start, updated.end)
-                                                    expandedRangeIds.add(range.id)
-                                                }
-                                            } else {
-                                                // Move downstream ranges cleanly forward to adjust for character offset shifting
-                                                val index = localRanges.indexOfFirst { it.id == range.id }
-                                                if (index != -1) {
-                                                    val shifted = range.copy(start = range.start + lengthDifference, end = range.end + lengthDifference)
-                                                    localRanges[index] = shifted
-                                                    viewModel.updateRange(range.id, shifted.start, shifted.end)
-                                                }
-                                            }
-                                        }
-                                    }
-
-                                    // D. CHECK ACTIVE BUTTONS: IF AN ACTIVE STYLE WAS NOT EXPANDED ABOVE, INJECT A NEW LAYER
-                                    val activeStyles = mutableListOf<String>()
-                                    if (boldLetters) activeStyles.add("bold")
-                                    if (italicLetters) activeStyles.add("italic")
-                                    if (underlineLetters) activeStyles.add("underline")
-                                    if (bigHeader) activeStyles.add("bigHeader")
-                                    if (biggerHeader) activeStyles.add("biggerHeader")
-
-                                    activeStyles.forEach { style ->
-                                        val alreadyExpanded = localRanges.any { it.type == style && expandedRangeIds.contains(it.id) }
-
-                                        if (!alreadyExpanded) {
-                                            val newRange = HomeViewModel.TransformationRanges(id = 0, listId, style, typedIndex, typedIndex + lengthDifference)
-                                            localRanges.add(newRange)
-
-                                            viewModel.addTransformationRange(listId, style, typedIndex, typedIndex + lengthDifference) { realId ->
-                                                val index = localRanges.indexOfFirst { it.id == 0 && it.start == typedIndex && it.type == style }
-                                                if (index != -1) {
-                                                    localRanges[index] = localRanges[index].copy(id = realId)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                                else if (lengthDifference < 0) {
-                                    // Handle text deletions cleanly (Kept exactly identical to your fully working backspace logic)
-                                    val deletedCount = -lengthDifference
-                                    val deletionIndex = cursorPos
-
-                                    val envelopingRanges = localRanges.filter { range ->
-                                        deletionIndex >= range.start && deletionIndex < range.end
-                                    }
-
-                                    envelopingRanges.forEach { affectedRange ->
-                                        val index = localRanges.indexOf(affectedRange)
-                                        if (index != -1) {
-                                            val updatedRange = affectedRange.copy(end = affectedRange.end - deletedCount)
-                                            if (updatedRange.end <= updatedRange.start) {
-                                                localRanges.removeAt(index)
-                                                viewModel.deleteTransformationRange(affectedRange.id)
-                                            } else {
-                                                localRanges[index] = updatedRange
-                                                viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
-                                            }
-                                        }
-                                    }
-
-                                    val remainingRanges = localRanges.toList()
-                                    remainingRanges.forEach { range ->
-                                        if (envelopingRanges.contains(range)) return@forEach
-
-                                        if (range.start > deletionIndex && range.id != 0) {
-                                            val index = localRanges.indexOf(range)
-                                            if (index != -1) {
-                                                val shiftedRange = range.copy(
-                                                    start = maxOf(0, range.start - deletedCount),
-                                                    end = maxOf(0, range.end - deletedCount)
-                                                )
-
-                                                if (shiftedRange.end <= shiftedRange.start) {
-                                                    localRanges.removeAt(index)
-                                                    viewModel.deleteTransformationRange(range.id)
-                                                } else {
-                                                    localRanges[index] = shiftedRange
-                                                    viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // 3. APPLY UPDATE STATE WITH EXPLICIT CURSOR BOUNDS
-                                listText = newText.copy(
-                                    text = currentText,
-                                    selection = androidx.compose.ui.text.TextRange(selectionStart, selectionEnd)
-                                )
-
-                                viewModel.updateContent(listId, currentText)
-                            },
-                            keyboardOptions = KeyboardOptions(
-                                imeAction = ImeAction.Default
-                            ),
-                            keyboardActions = KeyboardActions(
-
-                            ),
-                            textStyle = TextStyle(
-                                fontSize = 20.sp,
-                                color = mainTextColor
-                            ),
-                            modifier = Modifier
-                                .size(screenWidth - 60.dp, screenHeight)
-                                .padding(8.dp),
-                            cursorBrush = SolidColor(mainTextColor),
-                            visualTransformation = TextVisualTransformation(localRanges)
-                        )
-                    }
-                }
-
-                AnimatedVisibility(
-                    visible = showSideBar,
-                    enter = slideInHorizontally { with(density) { 60.dp.roundToPx() } },
-                    exit = slideOutHorizontally { with(density) { 60.dp.roundToPx() } }
-
-                ) {
-                    Column(
-                        modifier = Modifier
-                            .size(60.dp, screenHeight)
-                            .background(color = Color(backgroundColor)),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
+                    items(1) {
                         Button(
                             modifier = Modifier.size(55.dp, 55.dp),
                             onClick = {
@@ -2066,8 +1774,9 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             shape = CircleShape
                         ) {
                             Text(
-                                text = "⋮",
-                                fontSize = 23.sp
+                                text = ":",
+                                fontSize = 27.sp,
+                                fontWeight = FontWeight.Bold
                             )
                         }
 
@@ -2226,6 +1935,392 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             )
                         }
                     }
+                }
+            }
+        }
+    ) { innerPadding ->
+        // screen container setup
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .background(color = Color(backgroundColor))
+        ) {
+            // top bar list name and buttons
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(settings.barColor)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // back button
+                Button(
+                    onClick = {
+                        navController.navigate("home")
+                    },
+                    colors = ButtonColors(
+                        containerColor = Color(settings.barColor),
+                        contentColor = barTextColor,
+                        disabledContentColor = barTextColor,
+                        disabledContainerColor = Color(settings.barColor)
+                    )
+                ) {
+                    Text(text = "Back", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // list name changing
+                if (isChangingListName) {
+                    val focusRequester = remember { FocusRequester() }
+
+                    BasicTextField(
+                        value = newListName,
+                        onValueChange = { text ->
+                            if (text.text.length <= 20) {
+                                newListName = text
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (newListName.text.isNotBlank() && (newListName.text != listName)) {
+                                    viewModel.updateListName(listId = listId, newName = newListName.text)
+                                    newListName = TextFieldValue(text = newListName.text, selection = TextRange(0, newListName.text.length))
+                                    isChangingListName = false
+                                }
+                            }
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = 26.sp,
+                            color = barTextColor,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        ),
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequester)
+                    )
+
+                    // request keyboard as soon as text field appears
+                    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+                } else {
+                    Text(
+                        text = listName,
+                        fontSize = 26.sp,
+                        color = barTextColor,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable( onClick = {
+                                isChangingListName = true
+                            } ),
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                // menu button
+                Button(
+                    onClick = { showSideBar = !showSideBar },
+                    colors = ButtonColors(
+                        containerColor = Color(settings.barColor),
+                        contentColor = barTextColor,
+                        disabledContentColor = barTextColor,
+                        disabledContainerColor = Color(settings.barColor)
+                    )
+                ) {
+                    Text(text = "☰", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                contentPadding = PaddingValues(
+                    top = 8.dp,
+                    start = 8.dp,
+                    end = 8.dp,
+                    bottom = 250.dp // 👈 Adjust this value to allow scrolling further up
+                )
+                ) {
+                if (loadedImages.isNotEmpty()) {
+                    item(key = "note_images_header_${listId}") {
+                        FlowRow(
+                            modifier = Modifier
+                                .sizeIn(
+                                    minWidth = 0.dp,
+                                    minHeight = 0.dp,
+                                    maxWidth = screenWidth,
+                                    maxHeight = screenHeight * 3
+                                )
+                                .padding(vertical = 8.dp)
+                        ) {
+                            loadedImages.forEach { imageData ->
+                                Card(
+                                    elevation = CardDefaults.elevatedCardElevation(5.dp, 5.dp, 5.dp, 5.dp, 5.dp, 5.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.padding(2.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            // .padding(horizontal = 4.dp, vertical = 2.dp)
+                                            .combinedClickable(
+                                                onClick = {
+                                                    tempImageId = imageData.id
+                                                    tempImageBitmap = imageData.bitmap
+                                                    showImagePreview = true
+                                                },
+                                                onLongClick = { expandedImageId = imageData.id }
+                                            ),
+                                        contentAlignment = Alignment.TopStart
+                                    ) {
+                                        Image(
+                                            bitmap = imageData.bitmap,
+                                            contentDescription = "Note Image",
+                                            modifier = Modifier
+                                                .sizeIn(
+                                                    maxHeight = screenWidth / 2 - 12.dp,
+                                                    maxWidth = screenWidth / 2 - 12.dp,
+                                                    minHeight = 0.dp,
+                                                    minWidth = 0.dp
+                                                )
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        DropdownMenu(
+                                            expanded = imageData.id == expandedImageId,
+                                            onDismissRequest = { expandedImageId = null }
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text(text = "Delete") },
+                                                onClick = {
+                                                    viewModel.deleteImage(imageData.id)
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item(key = "note_text_field_${listId}") {
+                    BasicTextField(
+                        value = listText,
+                        onValueChange = { newText ->
+                            val oldText = listText.text
+                            var currentText = newText.text
+                            var selectionStart = newText.selection.start
+                            var selectionEnd = newText.selection.end
+
+                            // 1. DETERMINE BULLET MODIFICATIONS FIRST
+                            val isBulletAddition = currentText.endsWith("\n") && bulletList
+                            val isBulletDeletion = oldText.endsWith("\n    • ") && currentText.length < oldText.length
+
+                            if (isBulletAddition) {
+                                currentText += "    • "
+                                selectionStart += 6
+                                selectionEnd += 6
+                            } else if (isBulletDeletion) {
+                                currentText = currentText.dropLast(5)
+                                selectionStart = maxOf(0, selectionStart - 5)
+                                selectionEnd = maxOf(0, selectionEnd - 5)
+                            }
+
+                            // 2. NOW EXECUTE RANGE ADJUSTMENTS BASED ON THE TRUE FINAL TEXT LENGTH
+                            val lengthDifference = currentText.length - oldText.length
+                            val cursorPos = selectionStart
+
+                            if (lengthDifference > 0) {
+                                val typedIndex = maxOf(0, cursorPos - lengthDifference)
+                                val expandedRangeIds = mutableSetOf<Int>()
+
+                                // Make a snapshot copy to safely read while modifying the main list
+                                val currentRangesSnapshot = localRanges.toList()
+
+                                currentRangesSnapshot.forEach { range ->
+                                    if (range.id == 0) return@forEach // Skip temporary assignments
+
+                                    // Map the specific range string type to its matching state toggle button
+                                    val isButtonActive = when (range.type) {
+                                        "bold" -> boldLetters
+                                        "italic" -> italicLetters
+                                        "underline" -> underlineLetters
+                                        "bigHeader" -> bigHeader
+                                        "biggerHeader" -> biggerHeader
+                                        else -> false
+                                    }
+
+                                    if (typedIndex > range.start && typedIndex < range.end) {
+                                        // CASE A: Cursor is strictly INSIDE the range
+                                        if (isButtonActive) {
+                                            // Button is ON -> Expand the existing range forward
+                                            val index = localRanges.indexOfFirst { it.id == range.id }
+                                            if (index != -1) {
+                                                val updated = range.copy(end = range.end + lengthDifference)
+                                                localRanges[index] = updated
+                                                viewModel.updateRange(range.id, updated.start, updated.end)
+                                                expandedRangeIds.add(range.id)
+                                            }
+                                        } else {
+                                            // Button is OFF -> ✨ SPLIT THE RANGE into a left and right half!
+                                            val index = localRanges.indexOfFirst { it.id == range.id }
+                                            if (index != -1) {
+                                                // Left Half: Capped right at the cursor insertion index
+                                                val leftRange = range.copy(end = typedIndex)
+                                                localRanges[index] = leftRange
+                                                viewModel.updateRange(range.id, leftRange.start, leftRange.end)
+
+                                                // Right Half: Shifted forward past our newly typed plain character
+                                                val rightStart = typedIndex + lengthDifference
+                                                val rightEnd = range.end + lengthDifference
+
+                                                viewModel.addTransformationRange(listId, range.type, rightStart, rightEnd) { realId ->
+                                                    val newRightRange = HomeViewModel.TransformationRanges(id = realId, listId, range.type, rightStart, rightEnd)
+                                                    localRanges.add(newRightRange)
+                                                }
+                                            }
+                                        }
+                                    } else if (typedIndex == range.end) {
+                                        // CASE B: Cursor is exactly at the trailing edge of the range
+                                        if (isButtonActive) {
+                                            val index = localRanges.indexOfFirst { it.id == range.id }
+                                            if (index != -1) {
+                                                val updated = range.copy(end = range.end + lengthDifference)
+                                                localRanges[index] = updated
+                                                viewModel.updateRange(range.id, updated.start, updated.end)
+                                                expandedRangeIds.add(range.id)
+                                            }
+                                        }
+                                        // If the button is inactive, we do nothing. The text automatically prints outside the style bounds.
+                                    } else if (range.start >= typedIndex) {
+                                        // CASE C: Range sits entirely downstream from the cursor
+                                        if (range.start == typedIndex && isButtonActive) {
+                                            // Cursor is at the leading edge and button is ON -> Swallow character into range
+                                            val index = localRanges.indexOfFirst { it.id == range.id }
+                                            if (index != -1) {
+                                                val updated = range.copy(end = range.end + lengthDifference)
+                                                localRanges[index] = updated
+                                                viewModel.updateRange(range.id, updated.start, updated.end)
+                                                expandedRangeIds.add(range.id)
+                                            }
+                                        } else {
+                                            // Move downstream ranges cleanly forward to adjust for character offset shifting
+                                            val index = localRanges.indexOfFirst { it.id == range.id }
+                                            if (index != -1) {
+                                                val shifted = range.copy(start = range.start + lengthDifference, end = range.end + lengthDifference)
+                                                localRanges[index] = shifted
+                                                viewModel.updateRange(range.id, shifted.start, shifted.end)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // D. CHECK ACTIVE BUTTONS: IF AN ACTIVE STYLE WAS NOT EXPANDED ABOVE, INJECT A NEW LAYER
+                                val activeStyles = mutableListOf<String>()
+                                if (boldLetters) activeStyles.add("bold")
+                                if (italicLetters) activeStyles.add("italic")
+                                if (underlineLetters) activeStyles.add("underline")
+                                if (bigHeader) activeStyles.add("bigHeader")
+                                if (biggerHeader) activeStyles.add("biggerHeader")
+
+                                activeStyles.forEach { style ->
+                                    val alreadyExpanded = localRanges.any { it.type == style && expandedRangeIds.contains(it.id) }
+
+                                    if (!alreadyExpanded) {
+                                        val newRange = HomeViewModel.TransformationRanges(id = 0, listId, style, typedIndex, typedIndex + lengthDifference)
+                                        localRanges.add(newRange)
+
+                                        viewModel.addTransformationRange(listId, style, typedIndex, typedIndex + lengthDifference) { realId ->
+                                            val index = localRanges.indexOfFirst { it.id == 0 && it.start == typedIndex && it.type == style }
+                                            if (index != -1) {
+                                                localRanges[index] = localRanges[index].copy(id = realId)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else if (lengthDifference < 0) {
+                                // Handle text deletions cleanly (Kept exactly identical to your fully working backspace logic)
+                                val deletedCount = -lengthDifference
+                                val deletionIndex = cursorPos
+
+                                val envelopingRanges = localRanges.filter { range ->
+                                    deletionIndex >= range.start && deletionIndex < range.end
+                                }
+
+                                envelopingRanges.forEach { affectedRange ->
+                                    val index = localRanges.indexOf(affectedRange)
+                                    if (index != -1) {
+                                        val updatedRange = affectedRange.copy(end = affectedRange.end - deletedCount)
+                                        if (updatedRange.end <= updatedRange.start) {
+                                            localRanges.removeAt(index)
+                                            viewModel.deleteTransformationRange(affectedRange.id)
+                                        } else {
+                                            localRanges[index] = updatedRange
+                                            viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
+                                        }
+                                    }
+                                }
+
+                                val remainingRanges = localRanges.toList()
+                                remainingRanges.forEach { range ->
+                                    if (envelopingRanges.contains(range)) return@forEach
+
+                                    if (range.start > deletionIndex && range.id != 0) {
+                                        val index = localRanges.indexOf(range)
+                                        if (index != -1) {
+                                            val shiftedRange = range.copy(
+                                                start = maxOf(0, range.start - deletedCount),
+                                                end = maxOf(0, range.end - deletedCount)
+                                            )
+
+                                            if (shiftedRange.end <= shiftedRange.start) {
+                                                localRanges.removeAt(index)
+                                                viewModel.deleteTransformationRange(range.id)
+                                            } else {
+                                                localRanges[index] = shiftedRange
+                                                viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 3. APPLY UPDATE STATE WITH EXPLICIT CURSOR BOUNDS
+                            listText = newText.copy(
+                                text = currentText,
+                                selection = androidx.compose.ui.text.TextRange(selectionStart, selectionEnd)
+                            )
+
+                            viewModel.updateContent(listId, currentText)
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Default
+                        ),
+                        keyboardActions = KeyboardActions(
+
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = 20.sp,
+                            color = mainTextColor,
+                            textIndent = if (bulletList) {
+                                // firstLine = 0 means the line with the bullet stays left
+                                // restLine = 28.sp pushes wrapped lines right to match your "    • " width
+                                TextIndent(firstLine = 0.sp, restLine = 28.sp)
+                            } else {
+                                TextIndent.None
+                            }
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        cursorBrush = SolidColor(mainTextColor),
+                        visualTransformation = TextVisualTransformation(localRanges)
+                    )
                 }
             }
 
@@ -2447,6 +2542,186 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                     }
                 }
             }
+
+            // expanded image
+            if (showImagePreview) {
+                Dialog(
+                    onDismissRequest = {
+                        showImagePreview = false
+                        tempImageBitmap = ImageBitmap(1, 1)
+                        tempImageId = 0
+                    }
+                ) {
+                    Scaffold(
+                        modifier = Modifier.fillMaxSize(),
+                        containerColor = Color.Transparent
+                    ) { innerPadding ->
+                        Column(
+                            modifier = Modifier
+                                .fillMaxSize()
+                        ) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.End,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                IconButton(
+                                    modifier = Modifier
+                                        .size(55.dp, 55.dp)
+                                        .padding(5.dp),
+                                    onClick = {
+                                        showConfirmImageDeleteDialog = true
+                                    },
+                                    colors = IconButtonColors(
+                                        containerColor = Color.DarkGray,
+                                        contentColor = Color.White,
+                                        disabledContentColor = Color.White,
+                                        disabledContainerColor = Color.DarkGray
+                                    ),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete Image",
+                                        modifier = Modifier.size(23.dp),
+                                        tint = Color.White
+                                    )
+                                }
+
+                                IconButton(
+                                    modifier = Modifier
+                                        .size(55.dp, 55.dp)
+                                        .padding(5.dp),
+                                    onClick = {
+                                        showImagePreview = false
+                                        tempImageBitmap = ImageBitmap(1, 1)
+                                        tempImageId = 0
+                                    },
+                                    colors = IconButtonColors(
+                                        containerColor = Color.DarkGray,
+                                        contentColor = Color.White,
+                                        disabledContentColor = Color.White,
+                                        disabledContainerColor = Color.DarkGray
+                                    ),
+                                    shape = RoundedCornerShape(10.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.TransitEnterexit,
+                                        contentDescription = "Exit",
+                                        modifier = Modifier.size(23.dp),
+                                        tint = Color.White
+                                    )
+                                }
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(color = Color.Transparent),
+                                contentAlignment = Alignment.Center,
+                            ) {
+                                Surface(
+                                    shape = RoundedCornerShape(15.dp),
+                                    modifier = Modifier.padding(innerPadding)
+                                ) {
+                                    Image(
+                                        bitmap = tempImageBitmap,
+                                        contentDescription = "Note Image",
+                                        modifier = Modifier
+                                            .sizeIn(
+                                                maxHeight = screenHeight - 125.dp,
+                                                maxWidth = screenWidth - 125.dp,
+                                                minHeight = 0.dp,
+                                                minWidth = 0.dp
+                                            )
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Fit
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // confirm delete image
+            if (showConfirmImageDeleteDialog) {
+                Dialog(
+                    onDismissRequest = { showConfirmImageDeleteDialog = false }
+                ) {
+                    Surface(
+                        shape = RoundedCornerShape(15.dp),
+                        modifier = Modifier
+                            .size(275.dp, 200.dp)
+                            .padding(15.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Delete,
+                                contentDescription = "Delete Image",
+                                modifier = Modifier
+                                    .size(28.dp),
+                                tint = Color.Gray
+                            )
+                            Text(
+                                text = "Delete Image?",
+                                fontSize = 25.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.Black,
+                                modifier = Modifier.padding(top = 8.dp)
+                            )
+
+                            Row (
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(top = 30.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Button(
+                                    onClick = {
+                                        showConfirmImageDeleteDialog = false
+                                    },
+                                    colors = ButtonColors(
+                                        containerColor = Color.Gray,
+                                        contentColor = Color.White,
+                                        disabledContentColor = Color.White,
+                                        disabledContainerColor = Color.Gray
+                                    )
+                                ) {
+                                    Text(
+                                        text = "Cancel",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+
+                                Button(
+                                    onClick = {
+                                        showImagePreview = false
+                                        showConfirmImageDeleteDialog = false
+                                        viewModel.deleteImage(tempImageId)
+                                    },
+                                    colors = ButtonColors(
+                                        containerColor = Color.Cyan,
+                                        contentColor = Color.Black,
+                                        disabledContentColor = Color.Black,
+                                        disabledContainerColor = Color.Cyan
+                                    )
+                                ) {
+                                    Text(
+                                        text = "Delete",
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
@@ -2590,6 +2865,13 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
+                Text(text = "  Settings",
+                    textAlign = TextAlign.Center,
+                    fontSize = 27.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(barTextColorChoice)
+                )
+
                 // back button
                 Button(
                     onClick = {
@@ -2613,17 +2895,12 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
                         disabledContainerColor = Color(barColorChoice)
                     )
                 ) {
-                    Text(text = "Apply", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                    Text(
+                        text = "Apply",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
-
-                Text(text = "Settings",
-                    modifier = Modifier.weight(1f),
-                    textAlign = TextAlign.Center,
-                    fontSize = 27.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(barTextColorChoice)
-                )
-                Text(text = "              ")
             }
 
             HorizontalDivider(thickness = 2.dp, color = Color(mainTextColor))
@@ -2700,6 +2977,18 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
                                     barColorChoice = colorDict[color]?:0xFFFFFF00L
                                     barColorChoiceString = color
 
+                                    when(color) {
+                                        "Black", "Dark Gray" -> {
+                                            barTextColorChoice = 0xFFFFFFFFL
+                                            barTextColorChoiceString = "White"
+                                        }
+
+                                        "White" -> {
+                                            barTextColorChoice = 0xFF000000L
+                                            barTextColorChoiceString = "Black"
+                                        }
+                                    }
+
                                     if (themeChoiceString != "Default") {
                                         barTextColorChoiceString = "Black"
                                         barTextColorChoice = 0xFF000000L
@@ -2751,6 +3040,18 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
                                 onClick = {
                                     barTextColorChoice = textColorDict[color]?:0xFF000000L
                                     barTextColorChoiceString = color
+
+                                    when(color) {
+                                        "Black" -> {
+                                            barColorChoice = 0xFFFFFFFFL
+                                            barColorChoiceString = "White"
+                                        }
+
+                                        "White" -> {
+                                            barColorChoice = 0xFF000000L
+                                            barColorChoiceString = "Black"
+                                        }
+                                    }
 
                                     if (themeChoiceString != "Default") {
                                         barColorChoiceString = "Yellow"
