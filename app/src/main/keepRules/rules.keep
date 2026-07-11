@@ -44,3 +44,27 @@
 -keep class * extends androidx.room.RoomDatabase
 -dontwarn androidx.room.**
 -keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+
+# =========================================================================
+# 6. Core Jetpack Glance Framework Protections
+# =========================================================================
+
+# Keep all subclasses of GlanceAppWidget and its receiver
+-keep class * extends androidx.glance.appwidget.GlanceAppWidget { *; }
+-keep class * extends androidx.glance.appwidget.GlanceAppWidgetReceiver { *; }
+
+# Protect internal Jetpack Glance engine interfaces from R8 optimization issues
+-keep class androidx.glance.** { *; }
+-dontwarn androidx.glance.**
+
+# 7. DataStore / Preferences Serialization Rules
+# Glance uses DataStore to track widget layouts and properties.
+# These rules ensure values aren't broken by reflection stripping.
+-keep class * implements java.io.Serializable {
+    static final long serialVersionUID;
+    private static final java.io.ObjectStreamField[] serialPersistentFields;
+    private void writeObject(java.io.ObjectOutputStream);
+    private void readObject(java.io.ObjectInputStream);
+    java.lang.Object writeReplace();
+    java.lang.Object readResolve();
+}
