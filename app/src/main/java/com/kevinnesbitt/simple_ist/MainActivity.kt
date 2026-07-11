@@ -1848,68 +1848,70 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                 )
             ) {
                 if (loadedImages.isNotEmpty()) {
-                    item(key = "note_images_header_${listId}") {
-                        FlowRow(
-                            modifier = Modifier
-                                .sizeIn(
-                                    minWidth = 0.dp,
-                                    minHeight = 0.dp,
-                                    maxWidth = screenWidth,
-                                    maxHeight = screenHeight * 3
-                                )
-                                .padding(vertical = 8.dp)
-                        ) {
-                            loadedImages.forEach { imageData ->
-                                Card(
-                                    elevation = CardDefaults.elevatedCardElevation(5.dp, 5.dp, 5.dp, 5.dp, 5.dp, 5.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.padding(2.dp)
+                    // item(key = "note_images_header_${listId}") {
+                    //
+                    // }
+                }
+
+                item {
+                    FlowRow(
+                        modifier = Modifier
+                            .sizeIn(
+                                minWidth = 0.dp,
+                                minHeight = 0.dp,
+                                maxWidth = screenWidth,
+                                maxHeight = screenHeight * 3
+                            )
+                            .padding(vertical = 8.dp)
+                    ) {
+                        loadedImages.forEach { imageData ->
+                            Card(
+                                elevation = CardDefaults.elevatedCardElevation(5.dp, 5.dp, 5.dp, 5.dp, 5.dp, 5.dp),
+                                shape = RoundedCornerShape(8.dp),
+                                modifier = Modifier.padding(2.dp)
+                            ) {
+                                Box(
+                                    modifier = Modifier
+                                        // .padding(horizontal = 4.dp, vertical = 2.dp)
+                                        .combinedClickable(
+                                            onClick = {
+                                                tempImageId = imageData.id
+                                                tempImageBitmap = imageData.bitmap
+                                                showImagePreview = true
+                                            },
+                                            onLongClick = { expandedImageId = imageData.id }
+                                        ),
+                                    contentAlignment = Alignment.TopStart
                                 ) {
-                                    Box(
+                                    Image(
+                                        bitmap = imageData.bitmap,
+                                        contentDescription = "Note Image",
                                         modifier = Modifier
-                                            // .padding(horizontal = 4.dp, vertical = 2.dp)
-                                            .combinedClickable(
-                                                onClick = {
-                                                    tempImageId = imageData.id
-                                                    tempImageBitmap = imageData.bitmap
-                                                    showImagePreview = true
-                                                },
-                                                onLongClick = { expandedImageId = imageData.id }
-                                            ),
-                                        contentAlignment = Alignment.TopStart
-                                    ) {
-                                        Image(
-                                            bitmap = imageData.bitmap,
-                                            contentDescription = "Note Image",
-                                            modifier = Modifier
-                                                .sizeIn(
-                                                    maxHeight = screenWidth / 2 - 12.dp,
-                                                    maxWidth = screenWidth / 2 - 12.dp,
-                                                    minHeight = 0.dp,
-                                                    minWidth = 0.dp
-                                                )
-                                                .clip(RoundedCornerShape(8.dp)),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                        DropdownMenu(
-                                            expanded = imageData.id == expandedImageId,
-                                            onDismissRequest = { expandedImageId = null }
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text(text = "Delete") },
-                                                onClick = {
-                                                    viewModel.deleteImage(imageData.id)
-                                                }
+                                            .sizeIn(
+                                                maxHeight = screenWidth / 2 - 12.dp,
+                                                maxWidth = screenWidth / 2 - 12.dp,
+                                                minHeight = 0.dp,
+                                                minWidth = 0.dp
                                             )
-                                        }
+                                            .clip(RoundedCornerShape(8.dp)),
+                                        contentScale = ContentScale.Crop
+                                    )
+                                    DropdownMenu(
+                                        expanded = imageData.id == expandedImageId,
+                                        onDismissRequest = { expandedImageId = null }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text(text = "Delete") },
+                                            onClick = {
+                                                viewModel.deleteImage(imageData.id)
+                                            }
+                                        )
                                     }
                                 }
                             }
                         }
                     }
-                }
 
-                item(key = "note_text_field_${listId}") {
                     BasicTextField(
                         value = listText,
                         onValueChange = { newText ->
