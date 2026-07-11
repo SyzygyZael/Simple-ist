@@ -1648,7 +1648,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
     LaunchedEffect(listText.selection) {
         val cursor = listText.selection.start
 
-        // ✨ THE FIX: Only read styles from the document if the text didn't change (Clicking/Arrows)
+        // Only read styles from the document if the text didn't change (Clicking/Arrows)
         if (listText.text == lastTextAnchor) {
             boldLetters = false
             italicLetters = false
@@ -1661,11 +1661,11 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
             }
 
             activeRangesAtCursor.forEach { range ->
-                if (range.type.contains("bold")) boldLetters = true
-                if (range.type.contains("italic")) italicLetters = true
-                if (range.type.contains("underline")) underlineLetters = true
-                if (range.type.contains("bigHeader")) bigHeader = true
-                if (range.type.contains("biggerHeader")) biggerHeader = true
+                if (range.type == "bold") boldLetters = true
+                if (range.type == "italic") italicLetters = true
+                if (range.type == "underline") underlineLetters = true
+                if (range.type == "bigHeader") bigHeader = true
+                if (range.type == "biggerHeader") biggerHeader = true
             }
         } else {
             // Text changed because of typing/deleting! Skip resetting buttons and sync the anchor instead.
@@ -1752,18 +1752,156 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                         Button(
                             modifier = Modifier.size(55.dp, 55.dp),
                             onClick = {
-                                bulletList = !bulletList
+                                val selection = listText.selection
+                                val originalText = listText.text
+                                val lines = originalText.split("\n")
+                                val bulletPrefix = "    • "
+                                val prefixLen = bulletPrefix.length
 
-                                if (bulletList && listText.text.endsWith("\n")) {
-                                    listText = TextFieldValue(text = listText.text + "    • ", selection = TextRange(listText.text.length + 6))
-                                    viewModel.updateContent(listId, listText.text)
-                                } else if (bulletList && listText.text.isEmpty()) {
-                                    listText = TextFieldValue(text = "    • ", selection = TextRange(listText.text.length + 6))
-                                    viewModel.updateContent(listId, listText.text)
-                                } else if (bulletList) {
-                                    listText = TextFieldValue(text = listText.text + "\n    • ", selection = TextRange(listText.text.length + 7))
-                                    viewModel.updateContent(listId, listText.text)
+                                // Calculate original absolute character indices of each line start/end
+                                val originalLineSpans = mutableListOf<Pair<Int, Int>>()
+                                var accum = 0
+                                lines.forEach { line ->
+                                    originalLineSpans.add(Pair(accum, accum + line.length))
+                                    accum += line.length + 1
                                 }
+
+                                // Identify target lines overlapping with current selection
+                                val isTargetLine = List(lines.size) { i ->
+                                    val (lineStart, lineEnd) = originalLineSpans[i]
+                                    if (selection.collapsed) {
+                                        selection.start in lineStart..lineEnd
+                                    } else {
+                                        val overlapStart = maxOf(selection.start, lineStart)
+                                        val overlapEnd = minOf(selection.end, lineEnd)
+                                        overlapStart <= overlapEnd && (overlapStart < overlapEnd || selection.start == lineStart || selection.end == lineEnd)
+                                    }
+                                }
+
+                                val targetLines = lines.filterIndexed { i, _ -> isTargetLine[i] }
+                                val isUnbulleting = targetLines.all { it.startsWith(bulletPrefix) || it.isEmpty() }
+
+                                // Index translation mapping function
+                                fun translateIndex(origIdx: Int): Int {
+                                    var origAccum = 0
+                                    var newAccum = 0
+
+                                    lines.forEachIndexed { i, line ->
+                                        val lineStart = origAccum
+                                        val lineEnd = origAccum + line.length
+
+                                        val willChange = isTargetLine[i]
+                                        val changeAmt = if (willChange) {
+                                            if (isUnbulleting) {
+                                                if (line.startsWith(bulletPrefix)) -prefixLen else 0
+                                            } else {
+                                                if (line.startsWith(bulletPrefix)) 0 else prefixLen
+                                            }
+                                        } else {
+                                            0
+                                        }
+
+                                        if (origIdx <= lineEnd) {
+                                            val offsetInLine = origIdx - lineStart
+                                            return if (willChange && isUnbulleting && line.startsWith(bulletPrefix)) {
+                                                if (offsetInLine < prefixLen) newAccum else newAccum + (offsetInLine - prefixLen)
+                                            } else if (willChange && !isUnbulleting && !line.startsWith(bulletPrefix)) {
+                                                newAccum + prefixLen + offsetInLine
+                                            } else {
+                                                newAccum + offsetInLine
+                                            }
+                                        }
+
+                                        origAccum += line.length + 1
+                                        newAccum += (line.length + changeAmt) + 1
+                                    }
+                                    return newAccum
+                                }
+
+                                // Reconstruct modified document string
+                                val newLines = lines.mapIndexed { i, line ->
+                                    if (isTargetLine[i]) {
+                                        if (isUnbulleting) line.removePrefix(bulletPrefix) else (if (line.startsWith(bulletPrefix)) line else bulletPrefix + line)
+                                    } else {
+                                        line
+                                    }
+                                }
+                                val finalFullText = newLines.joinToString("\n")
+
+                                val finalSelectionStart = translateIndex(selection.start)
+                                val finalSelectionEnd = translateIndex(selection.end)
+
+                                // Process ranges to exclude the newly inserted bullet prefixes
+                                val currentRangesSnapshot = localRanges.toList()
+                                localRanges.clear()
+
+                                currentRangesSnapshot.forEach { range ->
+                                    val newStart = translateIndex(range.start)
+                                    val newEnd = translateIndex(range.end)
+
+                                    if (newEnd > newStart) {
+                                        // Determine if this specific range spans over lines that just received bullets
+                                        var currentNewAccum = 0
+                                        val adjustedSubRanges = mutableListOf<Pair<Int, Int>>()
+
+                                        var runningStart = newStart
+
+                                        newLines.forEachIndexed { i, line ->
+                                            val lineStart = currentNewAccum
+                                            val lineEnd = currentNewAccum + line.length
+
+                                            // If a bullet prefix was freshly added to this line, check if the range overlaps it
+                                            if (isTargetLine[i] && !isUnbulleting && line.startsWith(bulletPrefix)) {
+                                                val bulletStart = lineStart
+                                                val bulletEnd = lineStart + prefixLen
+
+                                                // If the range spans across or starts inside the newly added bullet, slice it out
+                                                if (runningStart < bulletEnd && newEnd > bulletStart) {
+                                                    if (runningStart < bulletStart) {
+                                                        adjustedSubRanges.add(Pair(runningStart, bulletStart))
+                                                    }
+                                                    runningStart = maxOf(runningStart, bulletEnd)
+                                                }
+                                            }
+                                            currentNewAccum += line.length + 1
+                                        }
+
+                                        if (newEnd > runningStart) {
+                                            adjustedSubRanges.add(Pair(runningStart, newEnd))
+                                        }
+
+                                        // Apply adjustments back into local storage and database
+                                        if (adjustedSubRanges.isEmpty()) {
+                                            if (range.id != 0) viewModel.deleteTransformationRange(range.id)
+                                        } else {
+                                            // Update first fragment slot
+                                            val firstSub = adjustedSubRanges.first()
+                                            val updatedRange = range.copy(start = firstSub.first, end = firstSub.second)
+                                            localRanges.add(updatedRange)
+                                            if (range.id != 0) {
+                                                viewModel.updateRange(range.id, updatedRange.start, updatedRange.end)
+                                            }
+
+                                            // Create separate range fragments for downstream breaks if split by multiple bullets
+                                            for (k in 1 until adjustedSubRanges.size) {
+                                                val extraSub = adjustedSubRanges[k]
+                                                viewModel.addTransformationRange(listId, range.type, extraSub.first, extraSub.second) { realId ->
+                                                    val extraRange = HomeViewModel.TransformationRanges(id = realId, listId, range.type, extraSub.first, extraSub.second)
+                                                    localRanges.add(extraRange)
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        if (range.id != 0) viewModel.deleteTransformationRange(range.id)
+                                    }
+                                }
+
+                                listText = listText.copy(
+                                    text = finalFullText,
+                                    selection = TextRange(finalSelectionStart, finalSelectionEnd)
+                                )
+                                viewModel.updateContent(listId, finalFullText)
+                                bulletList = !isUnbulleting
                             },
                             colors = ButtonColors(
                                 containerColor = if (!bulletList) Color(backgroundColor) else Color.LightGray.copy(0.5f),
@@ -2130,6 +2268,12 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                 selectionEnd = maxOf(0, selectionEnd - 5)
                             }
 
+                            // ✨ BULLETPROOF HEADER FIX: If a newline was added anywhere, automatically turn off header styles
+                            if (currentText.count { it == '\n' } > oldText.count { it == '\n' }) {
+                                bigHeader = false
+                                biggerHeader = false
+                            }
+
                             // 2. NOW EXECUTE RANGE ADJUSTMENTS BASED ON THE TRUE FINAL TEXT LENGTH
                             val lengthDifference = currentText.length - oldText.length
                             val cursorPos = selectionStart
@@ -2156,25 +2300,34 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 
                                     if (typedIndex > range.start && typedIndex < range.end) {
                                         // CASE A: Cursor is strictly INSIDE the range
-                                        if (isButtonActive) {
-                                            // Button is ON -> Expand the existing range forward
-                                            val index = localRanges.indexOfFirst { it.id == range.id }
-                                            if (index != -1) {
+                                        val index = localRanges.indexOfFirst { it.id == range.id }
+                                        if (index != -1) {
+                                            if (isBulletAddition) {
+                                                // Even if the button is active, we MUST split the range to create an unstyled gap for the bullet
+                                                val leftRange = range.copy(end = typedIndex + 1) // Include the newline character
+                                                localRanges[index] = leftRange
+                                                viewModel.updateRange(range.id, leftRange.start, leftRange.end)
+
+                                                // Right Half starts after the bullet points prefix
+                                                val rightStart = typedIndex + 7
+                                                val rightEnd = range.end + 7
+
+                                                viewModel.addTransformationRange(listId, range.type, rightStart, rightEnd) { realId ->
+                                                    val newRightRange = HomeViewModel.TransformationRanges(id = realId, listId, range.type, rightStart, rightEnd)
+                                                    localRanges.add(newRightRange)
+                                                }
+                                            } else if (isButtonActive) {
+                                                // Button is ON -> Expand the existing range forward normally
                                                 val updated = range.copy(end = range.end + lengthDifference)
                                                 localRanges[index] = updated
                                                 viewModel.updateRange(range.id, updated.start, updated.end)
                                                 expandedRangeIds.add(range.id)
-                                            }
-                                        } else {
-                                            // Button is OFF -> ✨ SPLIT THE RANGE into a left and right half!
-                                            val index = localRanges.indexOfFirst { it.id == range.id }
-                                            if (index != -1) {
-                                                // Left Half: Capped right at the cursor insertion index
+                                            } else {
+                                                // Button is OFF -> SPLIT THE RANGE into a left and right half
                                                 val leftRange = range.copy(end = typedIndex)
                                                 localRanges[index] = leftRange
                                                 viewModel.updateRange(range.id, leftRange.start, leftRange.end)
 
-                                                // Right Half: Shifted forward past our newly typed plain character
                                                 val rightStart = typedIndex + lengthDifference
                                                 val rightEnd = range.end + lengthDifference
 
@@ -2189,17 +2342,18 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                         if (isButtonActive) {
                                             val index = localRanges.indexOfFirst { it.id == range.id }
                                             if (index != -1) {
-                                                val updated = range.copy(end = range.end + lengthDifference)
+                                                // If a bullet point is being added, only expand by 1 (the \n), skipping the bullet prefix
+                                                val expansionAmt = if (isBulletAddition) 1 else lengthDifference
+                                                val updated = range.copy(end = range.end + expansionAmt)
                                                 localRanges[index] = updated
                                                 viewModel.updateRange(range.id, updated.start, updated.end)
                                                 expandedRangeIds.add(range.id)
                                             }
                                         }
-                                        // If the button is inactive, we do nothing. The text automatically prints outside the style bounds.
                                     } else if (range.start >= typedIndex) {
                                         // CASE C: Range sits entirely downstream from the cursor
-                                        if (range.start == typedIndex && isButtonActive) {
-                                            // Cursor is at the leading edge and button is ON -> Swallow character into range
+                                        if (range.start == typedIndex && isButtonActive && !isBulletAddition) {
+                                            // Cursor is at leading edge and button is ON -> Swallow character into range
                                             val index = localRanges.indexOfFirst { it.id == range.id }
                                             if (index != -1) {
                                                 val updated = range.copy(end = range.end + lengthDifference)
@@ -2231,13 +2385,20 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                                     val alreadyExpanded = localRanges.any { it.type == style && expandedRangeIds.contains(it.id) }
 
                                     if (!alreadyExpanded) {
-                                        val newRange = HomeViewModel.TransformationRanges(id = 0, listId, style, typedIndex, typedIndex + lengthDifference)
-                                        localRanges.add(newRange)
+                                        // If it's a bullet addition, the new text style boundary should start AFTER the bullet prefix
+                                        val styleStart = if (isBulletAddition) typedIndex + 7 else typedIndex
+                                        val styleEnd = if (isBulletAddition) typedIndex + 7 else typedIndex + lengthDifference
 
-                                        viewModel.addTransformationRange(listId, style, typedIndex, typedIndex + lengthDifference) { realId ->
-                                            val index = localRanges.indexOfFirst { it.id == 0 && it.start == typedIndex && it.type == style }
-                                            if (index != -1) {
-                                                localRanges[index] = localRanges[index].copy(id = realId)
+                                        // Only create a new range asset if there is typed text to cover (handles initial enter press safely)
+                                        if (styleEnd > styleStart || !isBulletAddition) {
+                                            val newRange = HomeViewModel.TransformationRanges(id = 0, listId, style, styleStart, styleEnd)
+                                            localRanges.add(newRange)
+
+                                            viewModel.addTransformationRange(listId, style, styleStart, styleEnd) { realId ->
+                                                val index = localRanges.indexOfFirst { it.id == 0 && it.start == styleStart && it.type == style }
+                                                if (index != -1) {
+                                                    localRanges[index] = localRanges[index].copy(id = realId)
+                                                }
                                             }
                                         }
                                     }
