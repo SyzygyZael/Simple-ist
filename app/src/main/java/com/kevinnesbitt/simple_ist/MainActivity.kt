@@ -33,6 +33,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -1536,7 +1537,8 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun GenericListScreen(listId: Int, navController: NavController, viewModel: HomeViewModel, isPremium: Boolean) {
-    val loadedImages by viewModel.getImagesForList(listId).collectAsState()
+    val loadedImagesFlow = remember(listId) { viewModel.getImagesForList(listId) }
+    val loadedImages by loadedImagesFlow.collectAsState(initial = emptyList())
 
     val context = LocalContext.current
     val activity = context as Activity
@@ -1549,7 +1551,8 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
     val ranges = contentListObj?.transformationRanges?: emptyList()
 
     // 1. Grab the stream as a standard Compose state object
-    val imagePaths by viewModel.getImagePathsForList(listId).collectAsState()
+    val imagePathsFlow = remember(listId) { viewModel.getImagePathsForList(listId) }
+    val imagePaths by imagePathsFlow.collectAsState(initial = emptyList())
 
     val settings by viewModel.settings.collectAsState()
 
@@ -1733,19 +1736,434 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
             .fillMaxSize(),
         containerColor = Color(backgroundColor),
         bottomBar = {
+
+        }
+    ) { innerPadding ->
+        // screen container setup
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding)
+                .imePadding()
+                .background(color = Color(backgroundColor))
+        ) {
+            // top bar list name and buttons
+            Row(modifier = Modifier
+                .fillMaxWidth()
+                .background(Color(settings.barColor)),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                // back button
+                Button(
+                    onClick = {
+                        navController.navigate("home")
+                    },
+                    colors = ButtonColors(
+                        containerColor = Color(settings.barColor),
+                        contentColor = barTextColor,
+                        disabledContentColor = barTextColor,
+                        disabledContainerColor = Color(settings.barColor)
+                    )
+                ) {
+                    Text(text = "Back", fontSize = 17.sp, fontWeight = FontWeight.Bold)
+                }
+
+                // list name changing
+                if (isChangingListName) {
+                    val focusRequester = remember { FocusRequester() }
+
+                    BasicTextField(
+                        value = newListName,
+                        onValueChange = { text ->
+                            if (text.text.length <= 20) {
+                                newListName = text
+                            }
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Done
+                        ),
+                        keyboardActions = KeyboardActions(
+                            onDone = {
+                                if (newListName.text.isNotBlank() && (newListName.text != listName)) {
+                                    viewModel.updateListName(listId = listId, newName = newListName.text)
+                                    newListName = TextFieldValue(text = newListName.text, selection = TextRange(0, newListName.text.length))
+                                    isChangingListName = false
+                                }
+                            }
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = 26.sp,
+                            color = barTextColor,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center
+                        ),
+                        singleLine = true,
+                        modifier = Modifier
+                            .weight(1f)
+                            .focusRequester(focusRequester)
+                    )
+
+                    // request keyboard as soon as text field appears
+                    LaunchedEffect(Unit) { focusRequester.requestFocus() }
+
+                } else {
+                    Text(
+                        text = listName,
+                        fontSize = 26.sp,
+                        color = barTextColor,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .clickable( onClick = {
+                                isChangingListName = true
+                            } ),
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                // menu button
+                Button(
+                    onClick = { showSideBar = !showSideBar },
+                    colors = ButtonColors(
+                        containerColor = Color(settings.barColor),
+                        contentColor = barTextColor,
+                        disabledContentColor = barTextColor,
+                        disabledContainerColor = Color(settings.barColor)
+                    )
+                ) {
+                    Text(text = "☰", fontSize = 20.sp, fontWeight = FontWeight.Bold)
+                }
+            }
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .imePadding()
+                    .weight(1f),
+                contentPadding = PaddingValues(
+                    top = 8.dp,
+                    start = 8.dp,
+                    end = 8.dp,
+                    bottom = 250.dp // 👈 Adjust this value to allow scrolling further up
+                )
+            ) {
+                if (loadedImages.isNotEmpty()) {
+                    item(key = "note_images_header_${listId}") {
+                        FlowRow(
+                            modifier = Modifier
+                                .sizeIn(
+                                    minWidth = 0.dp,
+                                    minHeight = 0.dp,
+                                    maxWidth = screenWidth,
+                                    maxHeight = screenHeight * 3
+                                )
+                                .padding(vertical = 8.dp)
+                        ) {
+                            loadedImages.forEach { imageData ->
+                                Card(
+                                    elevation = CardDefaults.elevatedCardElevation(5.dp, 5.dp, 5.dp, 5.dp, 5.dp, 5.dp),
+                                    shape = RoundedCornerShape(8.dp),
+                                    modifier = Modifier.padding(2.dp)
+                                ) {
+                                    Box(
+                                        modifier = Modifier
+                                            // .padding(horizontal = 4.dp, vertical = 2.dp)
+                                            .combinedClickable(
+                                                onClick = {
+                                                    tempImageId = imageData.id
+                                                    tempImageBitmap = imageData.bitmap
+                                                    showImagePreview = true
+                                                },
+                                                onLongClick = { expandedImageId = imageData.id }
+                                            ),
+                                        contentAlignment = Alignment.TopStart
+                                    ) {
+                                        Image(
+                                            bitmap = imageData.bitmap,
+                                            contentDescription = "Note Image",
+                                            modifier = Modifier
+                                                .sizeIn(
+                                                    maxHeight = screenWidth / 2 - 12.dp,
+                                                    maxWidth = screenWidth / 2 - 12.dp,
+                                                    minHeight = 0.dp,
+                                                    minWidth = 0.dp
+                                                )
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                        DropdownMenu(
+                                            expanded = imageData.id == expandedImageId,
+                                            onDismissRequest = { expandedImageId = null }
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text(text = "Delete") },
+                                                onClick = {
+                                                    viewModel.deleteImage(imageData.id)
+                                                }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                item(key = "note_text_field_${listId}") {
+                    BasicTextField(
+                        value = listText,
+                        onValueChange = { newText ->
+                            val oldText = listText.text
+                            var currentText = newText.text
+                            var selectionStart = newText.selection.start
+                            var selectionEnd = newText.selection.end
+
+                            // 1. DETERMINE BULLET MODIFICATIONS FIRST
+                            val isBulletAddition = currentText.endsWith("\n") && bulletList
+                            val isBulletDeletion = oldText.endsWith("\n    • ") && currentText.length < oldText.length
+
+                            if (isBulletAddition) {
+                                currentText += "    • "
+                                selectionStart += 6
+                                selectionEnd += 6
+                            } else if (isBulletDeletion) {
+                                currentText = currentText.dropLast(5)
+                                selectionStart = maxOf(0, selectionStart - 5)
+                                selectionEnd = maxOf(0, selectionEnd - 5)
+                            }
+
+                            // ✨ BULLETPROOF HEADER FIX: If a newline was added anywhere, automatically turn off header styles
+                            if (currentText.count { it == '\n' } > oldText.count { it == '\n' }) {
+                                bigHeader = false
+                                biggerHeader = false
+                            }
+
+                            // 2. NOW EXECUTE RANGE ADJUSTMENTS BASED ON THE TRUE FINAL TEXT LENGTH
+                            val lengthDifference = currentText.length - oldText.length
+                            val cursorPos = selectionStart
+
+                            if (lengthDifference > 0) {
+                                val typedIndex = maxOf(0, cursorPos - lengthDifference)
+                                val expandedRangeIds = mutableSetOf<Int>()
+
+                                // Make a snapshot copy to safely read while modifying the main list
+                                val currentRangesSnapshot = localRanges.toList()
+
+                                currentRangesSnapshot.forEach { range ->
+                                    if (range.id == 0) return@forEach // Skip temporary assignments
+
+                                    // Map the specific range string type to its matching state toggle button
+                                    val isButtonActive = when (range.type) {
+                                        "bold" -> boldLetters
+                                        "italic" -> italicLetters
+                                        "underline" -> underlineLetters
+                                        "bigHeader" -> bigHeader
+                                        "biggerHeader" -> biggerHeader
+                                        else -> false
+                                    }
+
+                                    if (typedIndex > range.start && typedIndex < range.end) {
+                                        // CASE A: Cursor is strictly INSIDE the range
+                                        val index = localRanges.indexOfFirst { it.id == range.id }
+                                        if (index != -1) {
+                                            if (isBulletAddition) {
+                                                // Even if the button is active, we MUST split the range to create an unstyled gap for the bullet
+                                                val leftRange = range.copy(end = typedIndex + 1) // Include the newline character
+                                                localRanges[index] = leftRange
+                                                viewModel.updateRange(range.id, leftRange.start, leftRange.end)
+
+                                                // Right Half starts after the bullet points prefix
+                                                val rightStart = typedIndex + 7
+                                                val rightEnd = range.end + 7
+
+                                                viewModel.addTransformationRange(listId, range.type, rightStart, rightEnd) { realId ->
+                                                    val newRightRange = HomeViewModel.TransformationRanges(id = realId, listId, range.type, rightStart, rightEnd)
+                                                    localRanges.add(newRightRange)
+                                                }
+                                            } else if (isButtonActive) {
+                                                // Button is ON -> Expand the existing range forward normally
+                                                val updated = range.copy(end = range.end + lengthDifference)
+                                                localRanges[index] = updated
+                                                viewModel.updateRange(range.id, updated.start, updated.end)
+                                                expandedRangeIds.add(range.id)
+                                            } else {
+                                                // Button is OFF -> SPLIT THE RANGE into a left and right half
+                                                val leftRange = range.copy(end = typedIndex)
+                                                localRanges[index] = leftRange
+                                                viewModel.updateRange(range.id, leftRange.start, leftRange.end)
+
+                                                val rightStart = typedIndex + lengthDifference
+                                                val rightEnd = range.end + lengthDifference
+
+                                                viewModel.addTransformationRange(listId, range.type, rightStart, rightEnd) { realId ->
+                                                    val newRightRange = HomeViewModel.TransformationRanges(id = realId, listId, range.type, rightStart, rightEnd)
+                                                    localRanges.add(newRightRange)
+                                                }
+                                            }
+                                        }
+                                    } else if (typedIndex == range.end) {
+                                        // CASE B: Cursor is exactly at the trailing edge of the range
+                                        if (isButtonActive) {
+                                            val index = localRanges.indexOfFirst { it.id == range.id }
+                                            if (index != -1) {
+                                                // If a bullet point is being added, only expand by 1 (the \n), skipping the bullet prefix
+                                                val expansionAmt = if (isBulletAddition) 1 else lengthDifference
+                                                val updated = range.copy(end = range.end + expansionAmt)
+                                                localRanges[index] = updated
+                                                viewModel.updateRange(range.id, updated.start, updated.end)
+                                                expandedRangeIds.add(range.id)
+                                            }
+                                        }
+                                    } else if (range.start >= typedIndex) {
+                                        // CASE C: Range sits entirely downstream from the cursor
+                                        if (range.start == typedIndex && isButtonActive && !isBulletAddition) {
+                                            // Cursor is at leading edge and button is ON -> Swallow character into range
+                                            val index = localRanges.indexOfFirst { it.id == range.id }
+                                            if (index != -1) {
+                                                val updated = range.copy(end = range.end + lengthDifference)
+                                                localRanges[index] = updated
+                                                viewModel.updateRange(range.id, updated.start, updated.end)
+                                                expandedRangeIds.add(range.id)
+                                            }
+                                        } else {
+                                            // Move downstream ranges cleanly forward to adjust for character offset shifting
+                                            val index = localRanges.indexOfFirst { it.id == range.id }
+                                            if (index != -1) {
+                                                val shifted = range.copy(start = range.start + lengthDifference, end = range.end + lengthDifference)
+                                                localRanges[index] = shifted
+                                                viewModel.updateRange(range.id, shifted.start, shifted.end)
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // D. CHECK ACTIVE BUTTONS: IF AN ACTIVE STYLE WAS NOT EXPANDED ABOVE, INJECT A NEW LAYER
+                                val activeStyles = mutableListOf<String>()
+                                if (boldLetters) activeStyles.add("bold")
+                                if (italicLetters) activeStyles.add("italic")
+                                if (underlineLetters) activeStyles.add("underline")
+                                if (bigHeader) activeStyles.add("bigHeader")
+                                if (biggerHeader) activeStyles.add("biggerHeader")
+
+                                activeStyles.forEach { style ->
+                                    val alreadyExpanded = localRanges.any { it.type == style && expandedRangeIds.contains(it.id) }
+
+                                    if (!alreadyExpanded) {
+                                        // If it's a bullet addition, the new text style boundary should start AFTER the bullet prefix
+                                        val styleStart = if (isBulletAddition) typedIndex + 7 else typedIndex
+                                        val styleEnd = if (isBulletAddition) typedIndex + 7 else typedIndex + lengthDifference
+
+                                        // Only create a new range asset if there is typed text to cover (handles initial enter press safely)
+                                        if (styleEnd > styleStart || !isBulletAddition) {
+                                            val newRange = HomeViewModel.TransformationRanges(id = 0, listId, style, styleStart, styleEnd)
+                                            localRanges.add(newRange)
+
+                                            viewModel.addTransformationRange(listId, style, styleStart, styleEnd) { realId ->
+                                                val index = localRanges.indexOfFirst { it.id == 0 && it.start == styleStart && it.type == style }
+                                                if (index != -1) {
+                                                    localRanges[index] = localRanges[index].copy(id = realId)
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else if (lengthDifference < 0) {
+                                // Handle text deletions cleanly (Kept exactly identical to your fully working backspace logic)
+                                val deletedCount = -lengthDifference
+                                val deletionIndex = cursorPos
+
+                                val envelopingRanges = localRanges.filter { range ->
+                                    deletionIndex >= range.start && deletionIndex < range.end
+                                }
+
+                                envelopingRanges.forEach { affectedRange ->
+                                    val index = localRanges.indexOf(affectedRange)
+                                    if (index != -1) {
+                                        val updatedRange = affectedRange.copy(end = affectedRange.end - deletedCount)
+                                        if (updatedRange.end <= updatedRange.start) {
+                                            localRanges.removeAt(index)
+                                            viewModel.deleteTransformationRange(affectedRange.id)
+                                        } else {
+                                            localRanges[index] = updatedRange
+                                            viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
+                                        }
+                                    }
+                                }
+
+                                val remainingRanges = localRanges.toList()
+                                remainingRanges.forEach { range ->
+                                    if (envelopingRanges.contains(range)) return@forEach
+
+                                    if (range.start > deletionIndex && range.id != 0) {
+                                        val index = localRanges.indexOf(range)
+                                        if (index != -1) {
+                                            val shiftedRange = range.copy(
+                                                start = maxOf(0, range.start - deletedCount),
+                                                end = maxOf(0, range.end - deletedCount)
+                                            )
+
+                                            if (shiftedRange.end <= shiftedRange.start) {
+                                                localRanges.removeAt(index)
+                                                viewModel.deleteTransformationRange(range.id)
+                                            } else {
+                                                localRanges[index] = shiftedRange
+                                                viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+
+                            // 3. APPLY UPDATE STATE WITH EXPLICIT CURSOR BOUNDS
+                            listText = newText.copy(
+                                text = currentText,
+                                selection = androidx.compose.ui.text.TextRange(selectionStart, selectionEnd)
+                            )
+
+                            viewModel.updateContent(listId, currentText)
+                        },
+                        keyboardOptions = KeyboardOptions(
+                            imeAction = ImeAction.Default
+                        ),
+                        keyboardActions = KeyboardActions(
+
+                        ),
+                        textStyle = TextStyle(
+                            fontSize = 20.sp,
+                            color = mainTextColor,
+                            textIndent = if (bulletList) {
+                                // firstLine = 0 means the line with the bullet stays left
+                                // restLine = 28.sp pushes wrapped lines right to match your "    • " width
+                                TextIndent(firstLine = 0.sp, restLine = 28.sp)
+                            } else {
+                                TextIndent.None
+                            }
+                        ),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(8.dp),
+                        cursorBrush = SolidColor(mainTextColor),
+                        visualTransformation = TextVisualTransformation(localRanges)
+                    )
+                }
+            }
+
             AnimatedVisibility(
                 visible = showSideBar,
                 enter = slideInVertically { with(density) { 60.dp.roundToPx() } },
-                exit = slideOutVertically { with(density) { 60.dp.roundToPx() } }
+                exit = slideOutVertically { with(density) { 120.dp.roundToPx() } },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color.Transparent.copy(alpha = 0.0f))
+                    .navigationBarsPadding()
 
             ) {
                 LazyRow(
                     modifier = Modifier
                         // .size(screenWidth, 60.dp)
                         .fillMaxWidth()
-                        .background(color = Color.Transparent)
-                        .navigationBarsPadding()
-                        .imePadding(),
+                        .background(color = Color(backgroundColor)),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     items(1) {
@@ -2073,415 +2491,6 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             )
                         }
                     }
-                }
-            }
-        }
-    ) { innerPadding ->
-        // screen container setup
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(innerPadding)
-                .background(color = Color(backgroundColor))
-        ) {
-            // top bar list name and buttons
-            Row(modifier = Modifier
-                .fillMaxWidth()
-                .background(Color(settings.barColor)),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                // back button
-                Button(
-                    onClick = {
-                        navController.navigate("home")
-                    },
-                    colors = ButtonColors(
-                        containerColor = Color(settings.barColor),
-                        contentColor = barTextColor,
-                        disabledContentColor = barTextColor,
-                        disabledContainerColor = Color(settings.barColor)
-                    )
-                ) {
-                    Text(text = "Back", fontSize = 17.sp, fontWeight = FontWeight.Bold)
-                }
-
-                // list name changing
-                if (isChangingListName) {
-                    val focusRequester = remember { FocusRequester() }
-
-                    BasicTextField(
-                        value = newListName,
-                        onValueChange = { text ->
-                            if (text.text.length <= 20) {
-                                newListName = text
-                            }
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Done
-                        ),
-                        keyboardActions = KeyboardActions(
-                            onDone = {
-                                if (newListName.text.isNotBlank() && (newListName.text != listName)) {
-                                    viewModel.updateListName(listId = listId, newName = newListName.text)
-                                    newListName = TextFieldValue(text = newListName.text, selection = TextRange(0, newListName.text.length))
-                                    isChangingListName = false
-                                }
-                            }
-                        ),
-                        textStyle = TextStyle(
-                            fontSize = 26.sp,
-                            color = barTextColor,
-                            fontWeight = FontWeight.Bold,
-                            textAlign = TextAlign.Center
-                        ),
-                        singleLine = true,
-                        modifier = Modifier
-                            .weight(1f)
-                            .focusRequester(focusRequester)
-                    )
-
-                    // request keyboard as soon as text field appears
-                    LaunchedEffect(Unit) { focusRequester.requestFocus() }
-
-                } else {
-                    Text(
-                        text = listName,
-                        fontSize = 26.sp,
-                        color = barTextColor,
-                        fontWeight = FontWeight.Bold,
-                        modifier = Modifier
-                            .clickable( onClick = {
-                                isChangingListName = true
-                            } ),
-                        textAlign = TextAlign.Center
-                    )
-                }
-
-                // menu button
-                Button(
-                    onClick = { showSideBar = !showSideBar },
-                    colors = ButtonColors(
-                        containerColor = Color(settings.barColor),
-                        contentColor = barTextColor,
-                        disabledContentColor = barTextColor,
-                        disabledContainerColor = Color(settings.barColor)
-                    )
-                ) {
-                    Text(text = "☰", fontSize = 20.sp, fontWeight = FontWeight.Bold)
-                }
-            }
-
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                contentPadding = PaddingValues(
-                    top = 8.dp,
-                    start = 8.dp,
-                    end = 8.dp,
-                    bottom = 250.dp // 👈 Adjust this value to allow scrolling further up
-                )
-                ) {
-                if (loadedImages.isNotEmpty()) {
-                    item(key = "note_images_header_${listId}") {
-                        FlowRow(
-                            modifier = Modifier
-                                .sizeIn(
-                                    minWidth = 0.dp,
-                                    minHeight = 0.dp,
-                                    maxWidth = screenWidth,
-                                    maxHeight = screenHeight * 3
-                                )
-                                .padding(vertical = 8.dp)
-                        ) {
-                            loadedImages.forEach { imageData ->
-                                Card(
-                                    elevation = CardDefaults.elevatedCardElevation(5.dp, 5.dp, 5.dp, 5.dp, 5.dp, 5.dp),
-                                    shape = RoundedCornerShape(8.dp),
-                                    modifier = Modifier.padding(2.dp)
-                                ) {
-                                    Box(
-                                        modifier = Modifier
-                                            // .padding(horizontal = 4.dp, vertical = 2.dp)
-                                            .combinedClickable(
-                                                onClick = {
-                                                    tempImageId = imageData.id
-                                                    tempImageBitmap = imageData.bitmap
-                                                    showImagePreview = true
-                                                },
-                                                onLongClick = { expandedImageId = imageData.id }
-                                            ),
-                                        contentAlignment = Alignment.TopStart
-                                    ) {
-                                        Image(
-                                            bitmap = imageData.bitmap,
-                                            contentDescription = "Note Image",
-                                            modifier = Modifier
-                                                .sizeIn(
-                                                    maxHeight = screenWidth / 2 - 12.dp,
-                                                    maxWidth = screenWidth / 2 - 12.dp,
-                                                    minHeight = 0.dp,
-                                                    minWidth = 0.dp
-                                                )
-                                                .clip(RoundedCornerShape(8.dp)),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                        DropdownMenu(
-                                            expanded = imageData.id == expandedImageId,
-                                            onDismissRequest = { expandedImageId = null }
-                                        ) {
-                                            DropdownMenuItem(
-                                                text = { Text(text = "Delete") },
-                                                onClick = {
-                                                    viewModel.deleteImage(imageData.id)
-                                                }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-
-                item(key = "note_text_field_${listId}") {
-                    BasicTextField(
-                        value = listText,
-                        onValueChange = { newText ->
-                            val oldText = listText.text
-                            var currentText = newText.text
-                            var selectionStart = newText.selection.start
-                            var selectionEnd = newText.selection.end
-
-                            // 1. DETERMINE BULLET MODIFICATIONS FIRST
-                            val isBulletAddition = currentText.endsWith("\n") && bulletList
-                            val isBulletDeletion = oldText.endsWith("\n    • ") && currentText.length < oldText.length
-
-                            if (isBulletAddition) {
-                                currentText += "    • "
-                                selectionStart += 6
-                                selectionEnd += 6
-                            } else if (isBulletDeletion) {
-                                currentText = currentText.dropLast(5)
-                                selectionStart = maxOf(0, selectionStart - 5)
-                                selectionEnd = maxOf(0, selectionEnd - 5)
-                            }
-
-                            // ✨ BULLETPROOF HEADER FIX: If a newline was added anywhere, automatically turn off header styles
-                            if (currentText.count { it == '\n' } > oldText.count { it == '\n' }) {
-                                bigHeader = false
-                                biggerHeader = false
-                            }
-
-                            // 2. NOW EXECUTE RANGE ADJUSTMENTS BASED ON THE TRUE FINAL TEXT LENGTH
-                            val lengthDifference = currentText.length - oldText.length
-                            val cursorPos = selectionStart
-
-                            if (lengthDifference > 0) {
-                                val typedIndex = maxOf(0, cursorPos - lengthDifference)
-                                val expandedRangeIds = mutableSetOf<Int>()
-
-                                // Make a snapshot copy to safely read while modifying the main list
-                                val currentRangesSnapshot = localRanges.toList()
-
-                                currentRangesSnapshot.forEach { range ->
-                                    if (range.id == 0) return@forEach // Skip temporary assignments
-
-                                    // Map the specific range string type to its matching state toggle button
-                                    val isButtonActive = when (range.type) {
-                                        "bold" -> boldLetters
-                                        "italic" -> italicLetters
-                                        "underline" -> underlineLetters
-                                        "bigHeader" -> bigHeader
-                                        "biggerHeader" -> biggerHeader
-                                        else -> false
-                                    }
-
-                                    if (typedIndex > range.start && typedIndex < range.end) {
-                                        // CASE A: Cursor is strictly INSIDE the range
-                                        val index = localRanges.indexOfFirst { it.id == range.id }
-                                        if (index != -1) {
-                                            if (isBulletAddition) {
-                                                // Even if the button is active, we MUST split the range to create an unstyled gap for the bullet
-                                                val leftRange = range.copy(end = typedIndex + 1) // Include the newline character
-                                                localRanges[index] = leftRange
-                                                viewModel.updateRange(range.id, leftRange.start, leftRange.end)
-
-                                                // Right Half starts after the bullet points prefix
-                                                val rightStart = typedIndex + 7
-                                                val rightEnd = range.end + 7
-
-                                                viewModel.addTransformationRange(listId, range.type, rightStart, rightEnd) { realId ->
-                                                    val newRightRange = HomeViewModel.TransformationRanges(id = realId, listId, range.type, rightStart, rightEnd)
-                                                    localRanges.add(newRightRange)
-                                                }
-                                            } else if (isButtonActive) {
-                                                // Button is ON -> Expand the existing range forward normally
-                                                val updated = range.copy(end = range.end + lengthDifference)
-                                                localRanges[index] = updated
-                                                viewModel.updateRange(range.id, updated.start, updated.end)
-                                                expandedRangeIds.add(range.id)
-                                            } else {
-                                                // Button is OFF -> SPLIT THE RANGE into a left and right half
-                                                val leftRange = range.copy(end = typedIndex)
-                                                localRanges[index] = leftRange
-                                                viewModel.updateRange(range.id, leftRange.start, leftRange.end)
-
-                                                val rightStart = typedIndex + lengthDifference
-                                                val rightEnd = range.end + lengthDifference
-
-                                                viewModel.addTransformationRange(listId, range.type, rightStart, rightEnd) { realId ->
-                                                    val newRightRange = HomeViewModel.TransformationRanges(id = realId, listId, range.type, rightStart, rightEnd)
-                                                    localRanges.add(newRightRange)
-                                                }
-                                            }
-                                        }
-                                    } else if (typedIndex == range.end) {
-                                        // CASE B: Cursor is exactly at the trailing edge of the range
-                                        if (isButtonActive) {
-                                            val index = localRanges.indexOfFirst { it.id == range.id }
-                                            if (index != -1) {
-                                                // If a bullet point is being added, only expand by 1 (the \n), skipping the bullet prefix
-                                                val expansionAmt = if (isBulletAddition) 1 else lengthDifference
-                                                val updated = range.copy(end = range.end + expansionAmt)
-                                                localRanges[index] = updated
-                                                viewModel.updateRange(range.id, updated.start, updated.end)
-                                                expandedRangeIds.add(range.id)
-                                            }
-                                        }
-                                    } else if (range.start >= typedIndex) {
-                                        // CASE C: Range sits entirely downstream from the cursor
-                                        if (range.start == typedIndex && isButtonActive && !isBulletAddition) {
-                                            // Cursor is at leading edge and button is ON -> Swallow character into range
-                                            val index = localRanges.indexOfFirst { it.id == range.id }
-                                            if (index != -1) {
-                                                val updated = range.copy(end = range.end + lengthDifference)
-                                                localRanges[index] = updated
-                                                viewModel.updateRange(range.id, updated.start, updated.end)
-                                                expandedRangeIds.add(range.id)
-                                            }
-                                        } else {
-                                            // Move downstream ranges cleanly forward to adjust for character offset shifting
-                                            val index = localRanges.indexOfFirst { it.id == range.id }
-                                            if (index != -1) {
-                                                val shifted = range.copy(start = range.start + lengthDifference, end = range.end + lengthDifference)
-                                                localRanges[index] = shifted
-                                                viewModel.updateRange(range.id, shifted.start, shifted.end)
-                                            }
-                                        }
-                                    }
-                                }
-
-                                // D. CHECK ACTIVE BUTTONS: IF AN ACTIVE STYLE WAS NOT EXPANDED ABOVE, INJECT A NEW LAYER
-                                val activeStyles = mutableListOf<String>()
-                                if (boldLetters) activeStyles.add("bold")
-                                if (italicLetters) activeStyles.add("italic")
-                                if (underlineLetters) activeStyles.add("underline")
-                                if (bigHeader) activeStyles.add("bigHeader")
-                                if (biggerHeader) activeStyles.add("biggerHeader")
-
-                                activeStyles.forEach { style ->
-                                    val alreadyExpanded = localRanges.any { it.type == style && expandedRangeIds.contains(it.id) }
-
-                                    if (!alreadyExpanded) {
-                                        // If it's a bullet addition, the new text style boundary should start AFTER the bullet prefix
-                                        val styleStart = if (isBulletAddition) typedIndex + 7 else typedIndex
-                                        val styleEnd = if (isBulletAddition) typedIndex + 7 else typedIndex + lengthDifference
-
-                                        // Only create a new range asset if there is typed text to cover (handles initial enter press safely)
-                                        if (styleEnd > styleStart || !isBulletAddition) {
-                                            val newRange = HomeViewModel.TransformationRanges(id = 0, listId, style, styleStart, styleEnd)
-                                            localRanges.add(newRange)
-
-                                            viewModel.addTransformationRange(listId, style, styleStart, styleEnd) { realId ->
-                                                val index = localRanges.indexOfFirst { it.id == 0 && it.start == styleStart && it.type == style }
-                                                if (index != -1) {
-                                                    localRanges[index] = localRanges[index].copy(id = realId)
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            else if (lengthDifference < 0) {
-                                // Handle text deletions cleanly (Kept exactly identical to your fully working backspace logic)
-                                val deletedCount = -lengthDifference
-                                val deletionIndex = cursorPos
-
-                                val envelopingRanges = localRanges.filter { range ->
-                                    deletionIndex >= range.start && deletionIndex < range.end
-                                }
-
-                                envelopingRanges.forEach { affectedRange ->
-                                    val index = localRanges.indexOf(affectedRange)
-                                    if (index != -1) {
-                                        val updatedRange = affectedRange.copy(end = affectedRange.end - deletedCount)
-                                        if (updatedRange.end <= updatedRange.start) {
-                                            localRanges.removeAt(index)
-                                            viewModel.deleteTransformationRange(affectedRange.id)
-                                        } else {
-                                            localRanges[index] = updatedRange
-                                            viewModel.updateRange(affectedRange.id, updatedRange.start, updatedRange.end)
-                                        }
-                                    }
-                                }
-
-                                val remainingRanges = localRanges.toList()
-                                remainingRanges.forEach { range ->
-                                    if (envelopingRanges.contains(range)) return@forEach
-
-                                    if (range.start > deletionIndex && range.id != 0) {
-                                        val index = localRanges.indexOf(range)
-                                        if (index != -1) {
-                                            val shiftedRange = range.copy(
-                                                start = maxOf(0, range.start - deletedCount),
-                                                end = maxOf(0, range.end - deletedCount)
-                                            )
-
-                                            if (shiftedRange.end <= shiftedRange.start) {
-                                                localRanges.removeAt(index)
-                                                viewModel.deleteTransformationRange(range.id)
-                                            } else {
-                                                localRanges[index] = shiftedRange
-                                                viewModel.updateRange(range.id, shiftedRange.start, shiftedRange.end)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-
-                            // 3. APPLY UPDATE STATE WITH EXPLICIT CURSOR BOUNDS
-                            listText = newText.copy(
-                                text = currentText,
-                                selection = androidx.compose.ui.text.TextRange(selectionStart, selectionEnd)
-                            )
-
-                            viewModel.updateContent(listId, currentText)
-                        },
-                        keyboardOptions = KeyboardOptions(
-                            imeAction = ImeAction.Default
-                        ),
-                        keyboardActions = KeyboardActions(
-
-                        ),
-                        textStyle = TextStyle(
-                            fontSize = 20.sp,
-                            color = mainTextColor,
-                            textIndent = if (bulletList) {
-                                // firstLine = 0 means the line with the bullet stays left
-                                // restLine = 28.sp pushes wrapped lines right to match your "    • " width
-                                TextIndent(firstLine = 0.sp, restLine = 28.sp)
-                            } else {
-                                TextIndent.None
-                            }
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(8.dp),
-                        cursorBrush = SolidColor(mainTextColor),
-                        visualTransformation = TextVisualTransformation(localRanges)
-                    )
                 }
             }
 
