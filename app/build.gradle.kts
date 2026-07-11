@@ -16,8 +16,8 @@ android {
         applicationId = "com.kevinnesbitt.simple_ist"
         minSdk = 29
         targetSdk = 36
-        versionCode = 11
-        versionName = "simple-ist_1.9"
+        versionCode = 12
+        versionName = "simple-ist_1.10"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
