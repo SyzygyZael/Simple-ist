@@ -24,36 +24,38 @@ import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.text.TextAlign
-import kotlinx.coroutines.flow.first
 
 class GlanceWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        // 1. Get the database instance using your correct method name [cite: 12]
         val db = GroceryDao.AppDatabase.getDatabase(context)
         val dao = db.groceryDao()
 
-        // 2. Fetch the one-shot settings snapshot using .first()
-        val settingsSnapshot = dao.getSettings().first()
-        val targetListId = settingsSnapshot.widgetDisplayListId
+        // 1. Read settings once without Flow wrappers
+        val settingsSnapshot = dao.getSettingsOnce()
 
-        // 3. Collect snapshots of all lists, items, and content
-        val allLists = dao.getAllLists().first()
-        val allItems = dao.getAllItems().first()
-        val allContent = dao.getAllContent().first()
+        val finalSettings = settingsSnapshot ?: SettingsEntity(
+            settingId = 1,
+            barColor = 0xFFFFFF00L,
+            mainTextColor = 0xFF000000L,
+            backgroundColor = 0xFFFFFFFFL,
+            widgetDisplayListId = -1
+        )
 
-        // 4. Filter the data dynamically based on the active widget display selection
+        val targetListId = finalSettings.widgetDisplayListId
+
+        // 2. Use your new one-shot methods to read from the database instantly
+        val allLists = dao.getAllListsOneShot()
+        val allItems = dao.getAllItemsOneShot()
+        val allContent = dao.getAllContentOneShot()
+
         val groceryListObj = allLists.find { it.id == targetListId }
-
-        // Correctly filter out list items by comparing their listId
         val itemLst = allItems.filter { it.listId == targetListId }
-
         val contentListObj = allContent.find { it.listId == targetListId }
         val contentText = contentListObj?.content ?: ""
 
-        // 5. Send clean static elements into the composable layout
         provideContent {
             WidgetContent(
-                settings = settingsSnapshot,
+                settings = finalSettings,
                 groceryListObj = groceryListObj,
                 itemLst = itemLst,
                 content = contentText

@@ -3,7 +3,6 @@ package com.kevinnesbitt.simple_ist
 import android.app.Activity
 import android.net.Uri
 import android.os.Bundle
-import android.view.textclassifier.TextSelection
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -13,9 +12,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -33,7 +30,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
@@ -89,7 +85,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -105,11 +100,9 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextIndent
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -125,7 +118,6 @@ import androidx.navigation.navArgument
 import com.kevinnesbitt.simple_ist.ui.TextVisualTransformation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.time.delay
 import kotlin.collections.emptyList
 import sh.calvin.reorderable.ReorderableItem
 import sh.calvin.reorderable.rememberReorderableLazyListState
@@ -1315,7 +1307,7 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
                     state = lazyListState,
                 ) {
                     items(localItems, key = { groceryItem -> groceryItem.id }) { groceryItem ->
-                        ReorderableItem(reorderableState, key = groceryItem.id) { isDragging ->
+                        ReorderableItem(reorderableState, key = groceryItem.id) {
                             Card(
                                 modifier = Modifier
                                     .animateItem()
@@ -1475,18 +1467,13 @@ fun GroceryListScreen(listId: Int, navController: NavController, viewModel: Home
                     .fillMaxSize(),
                     contentAlignment = Alignment.Center
                 ) {
-                    if (randTextChooser == 1) {
-                        Text(text = "Tap '+' or on the screen to get started!", color = Color.Gray)
-                    } else if (randTextChooser == 2) {
-                        Text(text = "What are you shopping for today?", color = Color.Gray)
-                    } else if (randTextChooser == 3) {
-                        Text(text = "So many possibilities...", color = Color.Gray)
-                    } else if (randTextChooser == 4) {
-                        Text(text = "Quick! Write it down so you don't forget!", color = Color.Gray)
-                    } else if (randTextChooser == 5) {
-                        Text(text = "A blank space is but a limitless sky...", color = Color.Gray)
-                    } else if (randTextChooser == 6) {
-                        Text(text = "Tap an item to cross it out!", color = Color.Gray)
+                    when(randTextChooser) {
+                        1 -> Text(text = "Tap '+' or on the screen to get started!", color = Color.Gray)
+                        2 -> Text(text = "What are you shopping for today?", color = Color.Gray)
+                        3 -> Text(text = "So many possibilities...", color = Color.Gray)
+                        4 -> Text(text = "Quick! Write it down so you don't forget!", color = Color.Gray)
+                        5 -> Text(text = "A blank space is but a limitless sky...", color = Color.Gray)
+                        6 -> Text(text = "Tap an item to cross it out!", color = Color.Gray)
                     }
                 }
             }
@@ -1847,11 +1834,11 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                     bottom = 250.dp // 👈 Adjust this value to allow scrolling further up
                 )
             ) {
-                if (loadedImages.isNotEmpty()) {
-                    // item(key = "note_images_header_${listId}") {
-                    //
-                    // }
-                }
+                // if (loadedImages.isNotEmpty()) {
+                //     item(key = "note_images_header_${listId}") {
+                //
+                //     }
+                // }
 
                 item {
                     FlowRow(
@@ -2120,7 +2107,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
                             // 3. APPLY UPDATE STATE WITH EXPLICIT CURSOR BOUNDS
                             listText = newText.copy(
                                 text = currentText,
-                                selection = androidx.compose.ui.text.TextRange(selectionStart, selectionEnd)
+                                selection = TextRange(selectionStart, selectionEnd)
                             )
 
                             viewModel.updateContent(listId, currentText)
@@ -2268,7 +2255,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 
                                         newLines.forEachIndexed { i, line ->
                                             val lineStart = currentNewAccum
-                                            val lineEnd = currentNewAccum + line.length
+                                            // val lineEnd = currentNewAccum + line.length
 
                                             // If a bullet prefix was freshly added to this line, check if the range overlaps it
                                             if (isTargetLine[i] && !isUnbulleting && line.startsWith(bulletPrefix)) {
@@ -2902,7 +2889,7 @@ fun GenericListScreen(listId: Int, navController: NavController, viewModel: Home
 fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPremium: Boolean) {
     val windowInfo = LocalWindowInfo.current
     val screenWidth = windowInfo.containerDpSize.width
-    val screenHeight = windowInfo.containerDpSize.height
+    // val screenHeight = windowInfo.containerDpSize.height
 
     val context = LocalContext.current
     val activity = context as Activity

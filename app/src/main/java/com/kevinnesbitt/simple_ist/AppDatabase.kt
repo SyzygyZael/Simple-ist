@@ -168,6 +168,15 @@ interface GroceryDao {
     @Query("SELECT * FROM generic_list_content WHERE listId = :listId LIMIT 1")
     suspend fun getContentByListIdOneShot(listId: Int): GenericContentEntity?
 
+    @Query("SELECT * FROM grocery_lists ORDER BY listOrder ASC")
+    suspend fun getAllListsOneShot(): List<GroceryListEntity>
+
+    @Query("SELECT * FROM grocery_items ORDER BY itemOrder ASC")
+    suspend fun getAllItemsOneShot(): List<GroceryItemEntity>
+
+    @Query("SELECT * FROM generic_list_content")
+    suspend fun getAllContentOneShot(): List<GenericContentEntity>
+
     @Database(
         entities =
             [
