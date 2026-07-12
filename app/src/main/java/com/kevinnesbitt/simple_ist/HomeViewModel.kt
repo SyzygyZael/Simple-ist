@@ -372,43 +372,55 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             color = android.graphics.Color.BLACK
         }
 
-        val bigHeaderPaint = Paint().apply {
-            textSize = 20f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            color = android.graphics.Color.BLACK
-        }
-
-        val biggerHeaderPaint = Paint().apply {
-            textSize = 24f
-            typeface = Typeface.create(Typeface.DEFAULT, Typeface.BOLD)
-            color = android.graphics.Color.BLACK
-        }
-
+        // Flexible single-pass painter brush
         val textPaint = TextPaint().apply {
-            textSize = 14f
             color = android.graphics.Color.BLACK
         }
 
         canvas.drawText(data.listName.ifBlank { "Untitled List" }, marginX, yPosition, titlePaint)
         yPosition += 50f
 
+        // Draw associated list images
         if (data.imagePaths.isNotEmpty()) {
             var xPosition = marginX
-            val imageSize = 100f
+            val imageSize = 100f // The maximum bounding slot width/height
             val spacing = 10f
 
             data.imagePaths.forEach { path ->
                 try {
                     val bitmap = BitmapFactory.decodeFile(path)
                     if (bitmap != null) {
+                        // Check if the bounding slot layout box will exceed the edge of the PDF page
                         if (xPosition + imageSize > 555f) {
                             xPosition = marginX
                             yPosition += imageSize + spacing
                         }
+
+                        // 1. Calculate the proportional scale ratio required for a uniform "Fit"
+                        val originalWidth = bitmap.width.toFloat()
+                        val originalHeight = bitmap.height.toFloat()
+                        val scaleFactor = Math.min(imageSize / originalWidth, imageSize / originalHeight)
+
+                        // 2. Compute the exact dimensions keeping the aspect ratio locked
+                        val finalWidth = (originalWidth * scaleFactor).coerceAtLeast(1f).toInt()
+                        val finalHeight = (originalHeight * scaleFactor).coerceAtLeast(1f).toInt()
+
                         val scaledBitmap = android.graphics.Bitmap.createScaledBitmap(
-                            bitmap, imageSize.toInt(), imageSize.toInt(), true
+                            bitmap, finalWidth, finalHeight, true
                         )
-                        canvas.drawBitmap(scaledBitmap, xPosition, yPosition, null)
+
+                        // 3. Center the fit image cleanly inside its 100x100 layout square slot
+                        val offsetX = (imageSize - finalWidth) / 2f
+                        val offsetY = (imageSize - finalHeight) / 2f
+
+                        canvas.drawBitmap(scaledBitmap, xPosition + offsetX, yPosition + offsetY, null)
+
+                        // Recycle the temporary scaled instance to keep memory footprints low
+                        if (scaledBitmap != bitmap) {
+                            scaledBitmap.recycle()
+                        }
+
+                        // Advance the cursor by the standard grid slot size to keep alignment straight
                         xPosition += imageSize + spacing
                     }
                 } catch (e: Exception) {
@@ -418,7 +430,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             yPosition += imageSize + 30f
         }
 
-        val lines = data.content.split("\n")
+        // Fix: Normalize all variations of line breaks to prevent character index drift
+        val normalizedContent = data.content.replace("\r\n", "\n").replace("\r", "\n")
+        val lines = normalizedContent.split("\n")
         var globalIndexOffset = 0
 
         lines.forEach { line ->
@@ -429,63 +443,75 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                 yPosition = 50f
             }
 
-            val lineStartPos = globalIndexOffset
-            val lineEndPos = globalIndexOffset + line.length
+            var currentX = marginX
+            var chunkStart = 0
+            var maxLineTextSize = 14f // Tracks line height dynamically based on largest text element
 
-            // Overlap boundary checks implemented here to properly catch user text edits
-            val isBigHeader = data.ranges.any { range ->
-                range.type.contains("bigHeader") && (
-                        if (lineStartPos == lineEndPos) {
-                            range.start <= lineStartPos && range.end >= lineEndPos
-                        } else {
-                            range.start < lineEndPos && range.end > lineStartPos
-                        }
-                        )
-            }
-            val isBiggerHeader = data.ranges.any { range ->
-                range.type.contains("biggerHeader") && (
-                        if (lineStartPos == lineEndPos) {
-                            range.start <= lineStartPos && range.end >= lineEndPos
-                        } else {
-                            range.start < lineEndPos && range.end > lineStartPos
-                        }
-                        )
-            }
+            // Process line by breaking it into chunks sharing identical formatting styles
+            while (chunkStart < line.length) {
+                val firstPos = globalIndexOffset + chunkStart
 
-            if (isBiggerHeader) {
-                canvas.drawText(line, marginX, yPosition, biggerHeaderPaint)
-                yPosition += 32f
-            } else if (isBigHeader) {
-                canvas.drawText(line, marginX, yPosition, bigHeaderPaint)
-                yPosition += 28f
-            } else {
-                var currentX = marginX
+                // Map ALL formatting options—including headers—directly to character indices
+                val isBiggerHead = data.ranges.any { it.type.contains("biggerHeader") && firstPos >= it.start && firstPos < it.end }
+                val isBigHead = data.ranges.any { it.type.contains("bigHeader") && firstPos >= it.start && firstPos < it.end }
+                val isBold = data.ranges.any { it.type.contains("bold") && firstPos >= it.start && firstPos < it.end }
+                val isItalic = data.ranges.any { it.type.contains("italic") && firstPos >= it.start && firstPos < it.end }
+                val isUnderline = data.ranges.any { it.type.contains("underline") && firstPos >= it.start && firstPos < it.end }
 
-                line.forEachIndexed { localIndex, character ->
-                    val absoluteStringPos = globalIndexOffset + localIndex
+                // Find how far this precise combination of styles extends down the string segment
+                var chunkEnd = chunkStart + 1
+                while (chunkEnd < line.length) {
+                    val nextPos = globalIndexOffset + chunkEnd
+                    val nextBiggerHead = data.ranges.any { it.type.contains("biggerHeader") && nextPos >= it.start && nextPos < it.end }
+                    val nextBigHead = data.ranges.any { it.type.contains("bigHeader") && nextPos >= it.start && nextPos < it.end }
+                    val nextBold = data.ranges.any { it.type.contains("bold") && nextPos >= it.start && nextPos < it.end }
+                    val nextItalic = data.ranges.any { it.type.contains("italic") && nextPos >= it.start && nextPos < it.end }
+                    val nextUnderline = data.ranges.any { it.type.contains("underline") && nextPos >= it.start && nextPos < it.end }
 
-                    val isBold = data.ranges.any { it.type.contains("bold") && absoluteStringPos >= it.start && absoluteStringPos < it.end }
-                    val isItalic = data.ranges.any { it.type.contains("italic") && absoluteStringPos >= it.start && absoluteStringPos < it.end }
-                    val isUnderline = data.ranges.any { it.type.contains("underline") && absoluteStringPos >= it.start && absoluteStringPos < it.end }
-
-                    val styleFlag = when {
-                        isBold && isItalic -> Typeface.BOLD_ITALIC
-                        isBold -> Typeface.BOLD
-                        isItalic -> Typeface.ITALIC
-                        else -> Typeface.NORMAL
+                    if (nextBiggerHead == isBiggerHead && nextBigHead == isBigHead &&
+                        nextBold == isBold && nextItalic == isItalic && nextUnderline == isUnderline) {
+                        chunkEnd++
+                    } else {
+                        break
                     }
-
-                    textPaint.typeface = Typeface.create(Typeface.DEFAULT, styleFlag)
-                    textPaint.isUnderlineText = isUnderline
-
-                    val charStr = character.toString()
-                    canvas.drawText(charStr, currentX, yPosition, textPaint)
-
-                    currentX += textPaint.measureText(charStr)
                 }
-                yPosition += 24f
+
+                val chunkText = line.substring(chunkStart, chunkEnd)
+
+                // Dynamic layout resizing applied cleanly per-chunk
+                val currentChunkSize = when {
+                    isBiggerHead -> 24f
+                    isBigHead -> 20f
+                    else -> 14f
+                }
+                textPaint.textSize = currentChunkSize
+                if (currentChunkSize > maxLineTextSize) {
+                    maxLineTextSize = currentChunkSize
+                }
+
+                // Headers are implicitly bolded, but can also carry italic styling modifiers
+                val finalBold = isBold || isBigHead || isBiggerHead
+                val styleFlag = when {
+                    finalBold && isItalic -> Typeface.BOLD_ITALIC
+                    finalBold -> Typeface.BOLD
+                    isItalic -> Typeface.ITALIC
+                    else -> Typeface.NORMAL
+                }
+
+                textPaint.typeface = Typeface.create(Typeface.DEFAULT, styleFlag)
+                textPaint.isUnderlineText = isUnderline
+
+                // Render text with correct font kerning pairs
+                canvas.drawText(chunkText, currentX, yPosition, textPaint)
+                currentX += textPaint.measureText(chunkText)
+
+                chunkStart = chunkEnd
             }
 
+            // Advance line drop spacing safely depending on the largest text component found on this line
+            yPosition += maxLineTextSize * 1.4f
+
+            // Move structural tracker offset forward (+1 accounts for the stripped line break character)
             globalIndexOffset += line.length + 1
         }
 

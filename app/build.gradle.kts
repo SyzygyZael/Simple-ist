@@ -23,7 +23,11 @@ android {
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
-
+    signingConfigs {
+        getByName("debug") {
+            // Android uses defaults here automatically
+        }
+    }
     buildTypes {
         release {
             optimization {
@@ -36,6 +40,8 @@ android {
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt")
             )
+
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
     compileOptions {

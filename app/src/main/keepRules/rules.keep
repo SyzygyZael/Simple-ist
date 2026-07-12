@@ -1,70 +1,63 @@
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
-#
-# For more details, see
-#   https://d.android.com/r/tools/r8/keep-rules
+# =========================================================================
+# 1. Room Database Data Models & Implementation Protections
+# =========================================================================
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Core Room attributes
+-keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
+-dontwarn androidx.room.**
+-keep class * extends androidx.room.RoomDatabase
 
-# Add project specific R8 rules here.
-# AGP will combine all keep rule files in src/main/keepRules to pass to R8
-
-# 1. Keep the HomeViewModel and any inner classes/coroutines inside it
--keep class com.kevinnesbitt.simple_ist.HomeViewModel { *; }
--keep class com.kevinnesbitt.simple_ist.HomeViewModel$** { *; }
-
-# 2. Keep all your database Entity classes sitting in the root package
+# CRITICAL: Keep your concrete database tables entirely intact so field names don't change
 -keep class com.kevinnesbitt.simple_ist.GroceryListEntity { *; }
 -keep class com.kevinnesbitt.simple_ist.GroceryItemEntity { *; }
 -keep class com.kevinnesbitt.simple_ist.GenericContentEntity { *; }
 -keep class com.kevinnesbitt.simple_ist.ImageEntity { *; }
 -keep class com.kevinnesbitt.simple_ist.TransformationRangesEntity { *; }
 -keep class com.kevinnesbitt.simple_ist.SettingsEntity { *; }
-
-# 3. Keep the interface DAO and abstract Database class
 -keep class com.kevinnesbitt.simple_ist.GroceryDao { *; }
--keep class com.kevinnesbitt.simple_ist.GroceryDao$AppDatabase { *; }
 
-# 4. Keep your clean UI data structures if they are also in the root package
--keep class com.kevinnesbitt.simple_ist.HomeViewModel$GroceryList { *; }
--keep class com.kevinnesbitt.simple_ist.HomeViewModel$ItemList { *; }
--keep class com.kevinnesbitt.simple_ist.GroceryList* { *; }
--keep class com.kevinnesbitt.simple_ist.ItemList* { *; }
+# Keep Room's auto-generated database implementation engines
+-keep class com.kevinnesbitt.simple_ist.*_Impl { *; }
 
--keep class com.kevinnesbitt.simple_ist.GlanceWidgetReceiver { *; }
--keep class com.kevinnesbitt.simple_ist.GlanceWidget { *; }
--keep class com.kevinnesbitt.simple_ist.GlanceWidgetKt { *; }
-
-# 5. Core Room framework structural protections
--keep class * extends androidx.room.RoomDatabase
--dontwarn androidx.room.**
--keepattributes *Annotation*,Signature,InnerClasses,EnclosingMethod
 
 # =========================================================================
-# 6. Core Jetpack Glance Framework Protections
+# 2. Jetpack Glance & RemoteViews Structural Protections
 # =========================================================================
 
-# Keep all subclasses of GlanceAppWidget and its receiver
+# Automatically keeps your GlanceWidget and GlanceWidgetReceiver
 -keep class * extends androidx.glance.appwidget.GlanceAppWidget { *; }
 -keep class * extends androidx.glance.appwidget.GlanceAppWidgetReceiver { *; }
 
-# Protect internal Jetpack Glance engine interfaces from R8 optimization issues
+# Protect internal Jetpack Glance package structures completely
 -keep class androidx.glance.** { *; }
 -dontwarn androidx.glance.**
 
-# 7. DataStore / Preferences Serialization Rules
-# Glance uses DataStore to track widget layouts and properties.
-# These rules ensure values aren't broken by reflection stripping.
--keep class * implements java.io.Serializable {
-    static final long serialVersionUID;
-    private static final java.io.ObjectStreamField[] serialPersistentFields;
-    private void writeObject(java.io.ObjectOutputStream);
-    private void readObject(java.io.ObjectInputStream);
-    java.lang.Object writeReplace();
-    java.lang.Object readResolve();
+# Protect the collection item composition factories that drive Glance Lazy Columns
+-keep class androidx.glance.appwidget.lazy.** { *; }
+-dontwarn androidx.glance.appwidget.lazy.**
+
+
+# =========================================================================
+# 3. Jetpack DataStore / Preferences Rules
+# =========================================================================
+
+-keep class androidx.datastore.** { *; }
+-dontwarn androidx.datastore.**
+
+
+# =========================================================================
+# 4. WorkManager Obfuscation Fix (Fixes OverwritingInputMerger)
+# =========================================================================
+
+-dontwarn androidx.work.**
+-keep class androidx.work.** {
+    public <init>(...);
+    *;
 }
+
+
+# =========================================================================
+# 5. Coroutine Optimization Metadata
+# =========================================================================
+
+-keepattributes LocalVariableTable,LocalVariableTypeTable,LineNumberTable,SourceFile
