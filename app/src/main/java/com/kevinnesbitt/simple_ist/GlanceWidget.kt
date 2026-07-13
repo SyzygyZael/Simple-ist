@@ -24,6 +24,9 @@ import androidx.glance.layout.Row
 import androidx.glance.layout.fillMaxWidth
 import androidx.glance.layout.padding
 import androidx.glance.text.TextAlign
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.layout.size
 
 class GlanceWidget : GlanceAppWidget() {
     override suspend fun provideGlance(context: Context, id: GlanceId) {
@@ -87,8 +90,14 @@ fun WidgetContent(
             horizontalAlignment = Alignment.End,
             verticalAlignment = Alignment.CenterVertically
         ) {
+            Image(
+                provider = ImageProvider(R.drawable.simpleistlogo_round),
+                contentDescription = "App Logo",
+                modifier = GlanceModifier.size(30.dp)
+            )
+
             Text(
-                text = "     ➜]",
+                text = "             ➜]",
                 modifier = GlanceModifier
                     .padding(4.dp)
                     .clickable(actionStartActivity<MainActivity>()),

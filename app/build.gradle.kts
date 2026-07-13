@@ -16,10 +16,10 @@ android {
 
     defaultConfig {
         applicationId = "com.kevinnesbitt.simple_ist"
-        minSdk = 29
+        minSdk = 31
         targetSdk = 36
-        versionCode = 15
-        versionName = "simple-ist_1.10"
+        versionCode = 14
+        versionName = "simple-ist_1.11"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -50,6 +50,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 

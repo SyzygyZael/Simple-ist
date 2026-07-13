@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -45,6 +46,8 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowForwardIos
+import androidx.compose.material.icons.filled.ArrowBackIosNew
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.FileDownload
 import androidx.compose.material.icons.filled.Image
@@ -115,6 +118,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.kevinnesbitt.simple_ist.BuildConfig
 import com.kevinnesbitt.simple_ist.ui.TextVisualTransformation
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -182,6 +186,10 @@ class MainActivity : ComponentActivity() {
 
                     composable("settings") {
                         SettingsScreen(navController, viewModel, isPremium)
+                    }
+
+                    composable("credits") {
+                        CreditsScreen(navController, viewModel)
                     }
 
                     composable(
@@ -3004,9 +3012,15 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
             // set up bottom bar
             Row(modifier = Modifier
                 .fillMaxWidth()
-                .background(Color.Yellow),
-                horizontalArrangement = Arrangement.SpaceBetween
+                .background(Color(backgroundColor)),
+                horizontalArrangement = Arrangement.Start
             ) {
+                Text(
+                    text = "  ${BuildConfig.VERSION_NAME}",
+                    fontSize = 13.sp,
+                    color = Color.Gray,
+                    modifier = Modifier.padding(8.dp)
+                )
             }
         }
     ) { innerPadding ->
@@ -3024,13 +3038,6 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Text(text = "  Settings",
-                    textAlign = TextAlign.Center,
-                    fontSize = 27.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = Color(barTextColorChoice)
-                )
-
                 // back button
                 Button(
                     onClick = {
@@ -3051,6 +3058,30 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
                         containerColor = Color(barColorChoice),
                         contentColor = Color(barTextColorChoice),
                         disabledContentColor = Color(barTextColorChoice),
+                        disabledContainerColor = Color(barColorChoice)
+                    )
+                ) {
+                    Text(
+                        text = "Apply",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+
+                Text(text = "  Settings",
+                    textAlign = TextAlign.Center,
+                    fontSize = 27.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(barTextColorChoice)
+                )
+
+                // filler padding
+                Button(
+                    onClick = {  },
+                    colors = ButtonColors(
+                        containerColor = Color(barColorChoice),
+                        contentColor = Color(barColorChoice),
+                        disabledContentColor = Color(barColorChoice),
                         disabledContainerColor = Color(barColorChoice)
                     )
                 ) {
@@ -3486,6 +3517,38 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
                 }
             }
 
+            HorizontalDivider(thickness = 2.dp, color = Color(mainTextColor))
+
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(color = Color(backgroundColor))
+                    .clickable(
+                        onClick = {
+                            navController.navigate("credits")
+                        }
+                    ),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "Credits",
+                    modifier = Modifier.padding(21.dp),
+                    fontSize = 18.sp,
+                    color = Color(mainTextColor)
+                )
+
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForwardIos,
+                    contentDescription = "Credits Screen Nav",
+                    modifier = Modifier
+                        .size(23.dp),
+                    tint = Color(mainTextColor)
+                )
+            }
+
+            HorizontalDivider(thickness = 2.dp, color = Color(mainTextColor))
+
             if (!isPremium) {
                 val strokeGradient = Brush.linearGradient(
                     colors = listOf(
@@ -3605,6 +3668,119 @@ fun SettingsScreen(navController: NavController, viewModel: HomeViewModel, isPre
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+fun CreditsScreen(navController: NavController, viewModel: HomeViewModel) {
+    val settings by viewModel.settings.collectAsState()
+
+    var mainTextColor by remember(settings) {
+        // if (settings.theme != "Default") {
+        //     mutableLongStateOf(0xFF000000L)
+        // } else if (!settings.darkMode){
+        //     mutableLongStateOf(0xFF000000L)
+        // } else if (settings.darkMode) {
+        //     mutableLongStateOf(0xFFFFFFFFL)
+        // } else {
+        //     mutableLongStateOf(settings.mainTextColor)
+        // }
+
+        mutableLongStateOf(settings.mainTextColor)
+    }
+
+    var backgroundColor by remember(settings) {
+        // if (settings.theme != "Default") {
+        //     mutableLongStateOf(settings.backgroundColor)
+        // } else if (!settings.darkMode) {
+        //     mutableLongStateOf(0xFFFFFFFFL)
+        // } else if (settings.darkMode) {
+        //     mutableLongStateOf(0xFF111111L)
+        // } else {
+        //     mutableLongStateOf(settings.backgroundColor)
+        // }
+
+        mutableLongStateOf(settings.backgroundColor)
+    }
+
+    var barColorChoice by remember(settings) {
+        mutableLongStateOf(settings.barColor)
+    }
+
+    var barTextColorChoice by remember(settings) {
+        mutableLongStateOf(settings.barTextColor)
+    }
+
+    Scaffold(
+        topBar = {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(100.dp)
+                    .background(color = Color(barColorChoice))
+                    .padding(8.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.Bottom
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBackIosNew,
+                    contentDescription = "Back",
+                    modifier = Modifier
+                        .size(23.dp)
+                        .clickable(
+                            onClick = {
+                                navController.navigate("settings")
+                            }
+                        ),
+                    tint = Color(barTextColorChoice)
+                )
+
+                Text(
+                    text = "Credits",
+                    fontSize = 25.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(barTextColorChoice)
+                )
+
+                Icon(
+                    imageVector = Icons.Default.ArrowBackIosNew,
+                    contentDescription = "Back",
+                    modifier = Modifier
+                        .size(23.dp),
+                    tint = Color(barColorChoice)
+                )
+            }
+        }
+    ) { innerPadding ->
+        Column(
+            modifier = Modifier
+                .padding(innerPadding)
+                .fillMaxSize()
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(8.dp)
+                    .fillMaxSize()
+            ) {
+                Text(
+                    text = "A quick thank you to all the testers for this app!\n",
+                    fontSize = 17.sp,
+                    color = Color(mainTextColor),
+                    fontWeight = FontWeight.Bold
+                )
+
+                Text(
+                    text =  "- Aazim Rafeeq & Family\n\n" +
+                            "- Syeda Saman\n\n" +
+                            "- Akibul Hasan\n\n" +
+                            "- Muhammed Dhanish\n\n" +
+                            "- Prajudi Setiawan\n\n" +
+                            "- Syifa Dinnah",
+                    fontSize = 15.sp,
+                    color = Color(mainTextColor)
+                )
             }
         }
     }
